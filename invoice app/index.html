@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Professional invoicing, quotations, loan tracking and business insights for Kweza Financial Solutions Ltd." />
+  <meta name="theme-color" content="#1565C0" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Kweza Invoice" />
+
+  <title>Kweza Invoice & Quotation App</title>
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" href="./assets/logo.png" type="image/png" />
+  <link rel="apple-touch-icon" href="./assets/logo.png" />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="./css/main.css" />
+  <link rel="stylesheet" href="./css/components.css" />
+  <link rel="stylesheet" href="./css/pages.css" />
+
+  <!-- CDN Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/dexie@3.2.4/dist/dexie.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+</head>
+<body>
+
+<!-- Login Screen Overlay -->
+<div id="login-screen"></div>
+
+<!-- Offline Banner -->
+<div class="offline-banner">
+  📶 You are offline — all data is saved locally and the app works fully without internet.
+</div>
+
+<!-- Sidebar Overlay (mobile) -->
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleMobileMenu()"></div>
+
+<!-- App Shell -->
+<div id="app">
+
+  <!-- ── SIDEBAR ── -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <img src="./assets/logo.png" id="sidebar-logo-img" alt="Kweza Logo"
+           onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />
+      <div style="display:none;width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#1565C0,#1976D2);align-items:center;justify-content:center;color:white;font-weight:900;font-size:13px;flex-shrink:0;">KFS</div>
+      <div class="sidebar-logo-text">
+        <span class="brand-name">Kweza Invoice</span>
+        <span class="brand-tagline">Financial Solutions</span>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">Main</div>
+
+      <div class="nav-item active" data-page="dashboard" onclick="navigate('dashboard')">
+        <span class="nav-icon">📊</span>
+        <span class="nav-label">Dashboard</span>
+      </div>
+
+      <div class="nav-section-label">Documents</div>
+
+      <div class="nav-item" data-page="quotations" onclick="navigate('quotations')">
+        <span class="nav-icon">📋</span>
+        <span class="nav-label">Quotations</span>
+      </div>
+
+      <div class="nav-item" data-page="invoices" onclick="navigate('invoices')">
+        <span class="nav-icon">🧾</span>
+        <span class="nav-label">Invoices</span>
+        <span class="nav-badge" id="invoice-badge" style="display:none;">0</span>
+      </div>
+
+      <div class="nav-section-label">Management</div>
+
+      <div class="nav-item" data-page="clients" onclick="navigate('clients')">
+        <span class="nav-icon">👥</span>
+        <span class="nav-label">Clients</span>
+      </div>
+
+      <div class="nav-item" data-page="catalog" onclick="navigate('catalog')">
+        <span class="nav-icon">📦</span>
+        <span class="nav-label">Catalog</span>
+      </div>
+
+      <div class="nav-item" data-page="loans" onclick="navigate('loans')">
+        <span class="nav-icon">💰</span>
+        <span class="nav-label">Loan Tracker</span>
+      </div>
+
+      <div class="nav-section-label">System</div>
+
+      <div class="nav-item" data-page="settings" onclick="navigate('settings')">
+        <span class="nav-icon">⚙️</span>
+        <span class="nav-label">Settings</span>
+      </div>
+    </nav>
+
+      <!-- User Panel -->
+      <div id="sidebar-user" class="sidebar-user"></div>
+
+      <div class="sidebar-footer">
+        <div class="nav-item" onclick="navigate('quotations/new')" style="color:var(--kweza-gold);">
+          <span class="nav-icon">✨</span>
+          <span class="nav-label">New Quotation</span>
+        </div>
+      </div>
+    </aside>
+
+  <!-- ── MAIN CONTENT ── -->
+  <div class="main-content">
+
+    <!-- Top Bar -->
+    <header class="topbar">
+      <button class="mobile-menu-btn" onclick="toggleMobileMenu()">☰</button>
+      <div class="topbar-title">
+        <h1 id="topbar-title">Dashboard</h1>
+        <p id="topbar-subtitle"></p>
+      </div>
+      <div class="topbar-actions">
+        <div class="topbar-date" id="topbar-date"></div>
+        <button class="btn btn-primary btn-sm" onclick="navigate('quotations/new')">✨ New Quote</button>
+      </div>
+    </header>
+
+    <!-- ── PAGES ── -->
+
+    <!-- Dashboard -->
+    <section class="page active" id="dashboard-page">
+      <div class="loading-spinner"><div class="spinner"></div><span>Loading dashboard…</span></div>
+    </section>
+
+    <!-- Quotations -->
+    <section class="page" id="quotations-page">
+      <div class="loading-spinner"><div class="spinner"></div><span>Loading quotations…</span></div>
+    </section>
+
+    <!-- Invoices -->
+    <section class="page" id="invoices-page">
+      <div class="loading-spinner"><div class="spinner"></div><span>Loading invoices…</span></div>
+    </section>
+
+    <!-- Clients -->
+    <section class="page" id="clients-page">
+      <div class="loading-spinner"><div class="spinner"></div><span>Loading clients…</span></div>
+    </section>
+
+    <!-- Catalog -->
+    <section class="page" id="catalog-page">
+      <div class="loading-spinner"><div class="spinner"></div><span>Loading catalog…</span></div>
+    </section>
+
+    <!-- Loan Tracker -->
+    <section class="page" id="loans-page">
+      <div class="loading-spinner"><div class="spinner"></div><span>Loading loans…</span></div>
+    </section>
+
+    <!-- Settings -->
+    <section class="page" id="settings-page">
+      <div class="loading-spinner"><div class="spinner"></div><span>Loading settings…</span></div>
+    </section>
+
+  </div><!-- /main-content -->
+</div><!-- /app -->
+
+<!-- Modal Overlay -->
+<div class="modal-overlay" id="modal-overlay"></div>
+
+<!-- Toast Container -->
+<div id="toast-container"></div>
+
+<!-- ── PWA Install Button (floating, shown on mobile) ── -->
+<button id="pwa-install-btn" onclick="triggerPWAInstall()"
+  style="display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:150;
+         background:linear-gradient(135deg,#1565C0,#1976D2);color:white;border:none;
+         padding:12px 24px;border-radius:99px;font-weight:700;font-size:14px;
+         box-shadow:0 4px 20px rgba(21,101,192,0.5);cursor:pointer;font-family:inherit;">
+  📱 Install Kweza App
+</button>
+
+<!-- ── Scripts ── -->
+<script src="./js/db.js"></script>
+<script src="./js/auth.js"></script>
+<script src="./js/pdf.js"></script>
+<script src="./js/share.js"></script>
+<script src="./js/reminders.js"></script>
+<script src="./js/pages/dashboard.js"></script>
+<script src="./js/pages/clients.js"></script>
+<script src="./js/pages/catalog.js"></script>
+<script src="./js/pages/quotations.js"></script>
+<script src="./js/pages/invoices.js"></script>
+<script src="./js/pages/loans.js"></script>
+<script src="./js/pages/settings.js"></script>
+<script src="./js/app.js"></script>
+
+<script>
+  // Set live date in topbar
+  const dateEl = document.getElementById('topbar-date');
+  if (dateEl) dateEl.textContent = new Date().toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', year:'numeric' });
+</script>
+
+</body>
+</html>
