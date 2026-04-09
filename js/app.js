@@ -35,6 +35,7 @@ const ROUTES = {
   quotations: (sub) => window.KwezaPages.renderQuotations(sub),
   invoices:   (sub) => window.KwezaPages.renderInvoices(sub),
   loans:      (sub) => window.KwezaPages.renderLoans(sub),
+  reports:    () => window.KwezaPages.renderReports(),
   settings:   () => window.KwezaPages.renderSettings(),
 };
 
@@ -45,6 +46,7 @@ const PAGE_IDS = {
   quotations: 'quotations-page',
   invoices:   'invoices-page',
   loans:      'loans-page',
+  reports:    'reports-page',
   settings:   'settings-page',
 };
 
@@ -55,6 +57,7 @@ const PAGE_TITLES = {
   quotations: { title: 'Quotations', sub: 'Create & manage quotations' },
   invoices:   { title: 'Invoices', sub: 'Billing & payments' },
   loans:      { title: 'Loan Tracker', sub: 'Track payments & balances' },
+  reports:    { title: 'Reports', sub: 'Export system data' },
   settings:   { title: 'Settings', sub: 'Configure your app' },
 };
 
@@ -203,10 +206,14 @@ async function initApp(user) {
     try { await window.KwezaReminders.runReminderCheck(); } catch(e) { /* silent */ }
   }, 3000);
 
-  // Hide settings form non-admins
+  // Hide settings and reports from non-admins
   const settingsItem = document.querySelector('.nav-item[data-page="settings"]');
   if (settingsItem) {
     settingsItem.style.display = user.role === 'admin' ? 'flex' : 'none';
+  }
+  const reportsItem = document.querySelector('.nav-item[data-page="reports"]');
+  if (reportsItem) {
+    reportsItem.style.display = user.role === 'admin' ? 'flex' : 'none';
   }
 
   const hash = window.location.hash.replace('#', '') || 'dashboard';

@@ -13,6 +13,17 @@ function applyDeptFilter(records) {
   return records.filter(r => r.departmentId === deptId || r.departmentId == null);
 }
 
+function setInvoiceStep(step) {
+  document.querySelectorAll('#invoices-page .wizard-step').forEach((el, i) => {
+    if (i + 1 === step) el.classList.add('active'); else el.classList.remove('active');
+    if (i + 1 < step) el.classList.add('completed'); else el.classList.remove('completed');
+  });
+  document.querySelectorAll('#invoices-page .wizard-content').forEach((el, i) => {
+    if (i + 1 === step) el.classList.add('active'); else el.classList.remove('active');
+  });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
 async function renderInvoices(subpage = '') {
   if (subpage === 'new') { await renderInvoiceBuilder(null); return; }
   if (subpage && !isNaN(subpage)) { await renderInvoiceDetail(parseInt(subpage)); return; }
@@ -73,7 +84,7 @@ function invoiceCardHTML(inv, client, fmt) {
       <div class="action-row" onclick="event.stopPropagation()">
         <button class="btn btn-secondary btn-sm" onclick="navigate('invoices/${inv.id}')">View</button>
         ${inv.status!=='paid'?`<button class="btn btn-success btn-sm" onclick="openPaymentModal(${inv.id})">💳 Pay</button>`:''}
-        <button class="btn btn-ghost btn-icon" onclick="window.KwezaPDF.generatePDF('invoice',${inv.id})" title="PDF">📄</button>
+        <button class="btn btn-ghost btn-icon" onclick="window.KwezaPDF.generatePDF('invoice',${inv.id})" title="Download">⬇️</button>
         <button class="btn btn-ghost btn-icon" onclick="window.KwezaShare.shareViaWhatsApp('invoice',${inv.id})" title="WhatsApp">💬</button>
         <button class="btn btn-ghost btn-icon" onclick="deleteInvoice(${inv.id})" title="Del">🗑</button>
       </div>
@@ -102,7 +113,7 @@ async function renderInvoiceDetail(invoiceId) {
       <div class="flex gap-8">
         <button class="btn btn-secondary" onclick="renderInvoices()">← Back</button>
         <button class="btn btn-secondary" onclick="window.KwezaPDF.printDocument('invoice',${invoiceId})">🖨 Print</button>
-        <button class="btn btn-secondary" onclick="window.KwezaPDF.generatePDF('invoice',${invoiceId})">📄 PDF</button>
+        <button class="btn btn-secondary" onclick="window.KwezaPDF.generatePDF('invoice',${invoiceId})">⬇️ Download PDF</button>
         <button class="btn btn-gold"      onclick="window.KwezaShare.shareViaWhatsApp('invoice',${invoiceId})">💬 WhatsApp</button>
         ${invoice.status!=='paid'?`<button class="btn btn-success" onclick="openPaymentModal(${invoiceId})">💳 Record Payment</button>`:''}
       </div>
@@ -179,89 +190,136 @@ async function renderInvoiceBuilder(invoiceId) {
 
   document.getElementById('invoices-page').innerHTML = `
     <div class="page-header">
-      <div class="page-header-left"><h2>${isEdit?'Edit Invoice':'New Invoice'}</h2><p>Fill in the details below</p></div>
-      <div class="flex gap-8">
+      <div class="page-header-left">
+        <h2>${isEdit ? 'Edit Invoice' : 'New Invoice'}</h2>
+        <p>Step-by-step Invoice Builder</p>
+      </div>
+      <div class="flex gap-8 builder-top-actions">
         <button class="btn btn-secondary" onclick="renderInvoices()">← Back</button>
-        <button class="btn btn-primary" onclick="saveInvoice(${invoiceId})">💾 Save Invoice</button>
+        <button class="btn btn-success" onclick="saveInvoice(${invoiceId})">💾 Save Invoice</button>
       </div>
     </div>
-    <div class="builder-header">
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Client <span>*</span></label>
-          <select class="form-control" id="inv-client">
-            <option value="">— Select Client —</option>
-            ${allClients.map(c=>`<option value="${c.id}" ${invoice?.clientId==c.id?'selected':''}>${c.name}${c.company?' ('+c.company+')':''}</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Invoice Number</label>
-          <input class="form-control" id="inv-number" value="${nextNum}" />
-        </div>
-        <div class="form-group">
-          <label class="form-label">Date</label>
-          <input class="form-control" id="inv-date" type="date" value="${invoice?invoice.date.split('T')[0]:today}" />
-        </div>
-        <div class="form-group">
-          <label class="form-label">Due Date</label>
-          <input class="form-control" id="inv-due" type="date" value="${invoice?.dueDate?invoice.dueDate.split('T')[0]:due30.toISOString().split('T')[0]}" />
-        </div>
+
+    <!-- WIZARD PROGRESS BAR -->
+    <div class="wizard-steps" style="padding: 0 10%;">
+      <div class="wizard-step active" onclick="window.KwezaPages.setInvoiceStep(1)">
+        <div class="wizard-step-circle">1</div>
+        <div class="wizard-step-label">Details</div>
       </div>
-      <div class="form-row mt-12" style="margin-top:12px;">
-        <div class="form-group">
-          <label class="form-label">Currency</label>
-          <select class="form-control" id="inv-currency">
-            <option value="MWK" ${(invoice?.currency||currency)==='MWK'?'selected':''}>MWK</option>
-            <option value="USD" ${(invoice?.currency||currency)==='USD'?'selected':''}>USD</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Discount (%)</label>
-          <input class="form-control" id="inv-discount" type="number" min="0" max="100" value="${invoice?.discount||0}" oninput="recalcInvTotals()" />
-        </div>
-        <div class="form-group">
-          <label class="form-label">VAT (%)</label>
-          <input class="form-control" id="inv-tax" type="number" min="0" value="${invoice?.tax??settings.defaults.vatRate??16.5}" oninput="recalcInvTotals()" />
-        </div>
-        <div class="form-group">
-          <label class="form-label">Status</label>
-          <select class="form-control" id="inv-status">
-            <option value="unpaid" ${invoice?.status==='unpaid'?'selected':''}>Unpaid</option>
-            <option value="partial" ${invoice?.status==='partial'?'selected':''}>Partial</option>
-            <option value="paid" ${invoice?.status==='paid'?'selected':''}>Paid</option>
-          </select>
-        </div>
+      <div class="wizard-step" onclick="window.KwezaPages.setInvoiceStep(2)">
+        <div class="wizard-step-circle">2</div>
+        <div class="wizard-step-label">Services</div>
+      </div>
+      <div class="wizard-step" onclick="window.KwezaPages.setInvoiceStep(3)">
+        <div class="wizard-step-circle">3</div>
+        <div class="wizard-step-label">Review</div>
       </div>
     </div>
-    <div class="card mt-20" style="margin-top:20px;">
-      <div class="card-header">
-        <div class="card-title">Line Items</div>
-        <div class="flex gap-8">
-          <button class="btn btn-secondary btn-sm" onclick="openInvCatalogPicker()">📦 Catalog</button>
-          <button class="btn btn-primary btn-sm" onclick="addInvLineItem()">+ Add Row</button>
+
+    <!-- STEP 1: DETAILS -->
+    <div class="wizard-content active" id="iw-step-1">
+      <div class="card">
+        <h3 class="card-title" style="margin-bottom:16px;">Client & Details</h3>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Client <span>*</span></label>
+            <select class="form-control" id="inv-client">
+              <option value="">— Select Client —</option>
+              ${allClients.map(c=>`<option value="${c.id}" ${invoice?.clientId==c.id?'selected':''}>${c.name}${c.company?' ('+c.company+')':''}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Invoice Number</label>
+            <input class="form-control" id="inv-number" value="${nextNum}" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Date</label>
+            <input class="form-control" id="inv-date" type="date" value="${invoice?invoice.date.split('T')[0]:today}" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Due Date</label>
+            <input class="form-control" id="inv-due" type="date" value="${invoice?.dueDate?invoice.dueDate.split('T')[0]:due30.toISOString().split('T')[0]}" />
+          </div>
+        </div>
+        <div class="form-row mt-12" style="margin-top:12px;">
+          <div class="form-group">
+            <label class="form-label">Currency</label>
+            <select class="form-control" id="inv-currency">
+              <option value="MWK" ${(invoice?.currency||currency)==='MWK'?'selected':''}>MWK</option>
+              <option value="USD" ${(invoice?.currency||currency)==='USD'?'selected':''}>USD</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Discount (%)</label>
+            <input class="form-control" id="inv-discount" type="number" min="0" max="100" value="${invoice?.discount||0}" oninput="recalcInvTotals()" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">VAT (%)</label>
+            <input class="form-control" id="inv-tax" type="number" min="0" value="${invoice?.tax??settings.defaults.vatRate??16.5}" oninput="recalcInvTotals()" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Status</label>
+            <select class="form-control" id="inv-status">
+              <option value="unpaid" ${invoice?.status==='unpaid'?'selected':''}>Unpaid</option>
+              <option value="partial" ${invoice?.status==='partial'?'selected':''}>Partial</option>
+              <option value="paid" ${invoice?.status==='paid'?'selected':''}>Paid</option>
+            </select>
+          </div>
         </div>
       </div>
-      <table class="line-items-table">
-        <thead><tr>
-          <th style="width:40%;">Description</th><th style="width:15%;text-align:right;">Rate</th>
-          <th style="width:8%;text-align:center;">Qty</th><th style="width:10%;text-align:center;">Disc%</th>
-          <th style="width:18%;text-align:right;">Amount</th><th style="width:9%;"></th>
-        </tr></thead>
-        <tbody id="inv-line-items-body"></tbody>
-      </table>
+      <div class="wizard-actions">
+        <button class="btn btn-secondary" onclick="renderInvoices()">Cancel</button>
+        <button class="btn btn-primary" onclick="window.KwezaPages.setInvoiceStep(2)">Next: Services →</button>
+      </div>
     </div>
-    <div class="grid grid-2 mt-20" style="margin-top:20px;">
-      <div class="form-group">
-        <label class="form-label">Notes</label>
-        <textarea class="form-control" id="inv-notes" rows="4">${invoice?.notes||''}</textarea>
+
+    <!-- STEP 2: SERVICES & ITEMS -->
+    <div class="wizard-content" id="iw-step-2">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Services Overview</div>
+          <div class="flex gap-8">
+            <button class="btn btn-secondary btn-sm" onclick="openInvCatalogPicker()">📦 Catalog</button>
+            <button class="btn btn-primary btn-sm" onclick="addInvLineItem()">+ Add Service</button>
+          </div>
+        </div>
+        <table class="line-items-table" id="inv-line-items-table">
+          <thead><tr>
+            <th style="width:40%;">Description</th><th style="width:15%;text-align:right;">Rate</th>
+            <th style="width:8%;text-align:center;">Qty</th><th style="width:10%;text-align:center;">Disc%</th>
+            <th style="width:18%;text-align:right;">Amount</th><th style="width:9%;"></th>
+          </tr></thead>
+          <tbody id="inv-line-items-body"></tbody>
+        </table>
       </div>
-      <div class="summary-box">
-        <div class="summary-row"><span>Subtotal</span><span id="is-subtotal">MWK 0.00</span></div>
-        <div class="summary-row"><span>Discount</span><span id="is-discount">—</span></div>
-        <div class="summary-row"><span>VAT</span><span id="is-vat">—</span></div>
-        <div class="summary-row total"><span>TOTAL</span><span id="is-total">MWK 0.00</span></div>
+      <div class="wizard-actions">
+        <button class="btn btn-secondary" onclick="window.KwezaPages.setInvoiceStep(1)">← Back</button>
+        <button class="btn btn-primary" onclick="window.KwezaPages.setInvoiceStep(3)">Next: Review →</button>
       </div>
-    </div>`;
+    </div>
+
+    <!-- STEP 3: REVIEW & TOTALS -->
+    <div class="wizard-content" id="iw-step-3">
+      <div class="card">
+        <h3 class="card-title" style="margin-bottom:16px;">Summary & Notes</h3>
+        <div class="grid grid-2">
+          <div class="form-group">
+            <label class="form-label">Notes</label>
+            <textarea class="form-control" id="inv-notes" rows="6">${invoice?.notes||''}</textarea>
+          </div>
+          <div class="summary-box">
+            <div class="summary-row"><span>Subtotal</span><span id="is-subtotal">MWK 0.00</span></div>
+            <div class="summary-row"><span>Discount</span><span id="is-discount">—</span></div>
+            <div class="summary-row"><span>VAT</span><span id="is-vat">—</span></div>
+            <div class="summary-row total"><span>TOTAL</span><span id="is-total">MWK 0.00</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="wizard-actions">
+        <button class="btn btn-secondary" onclick="window.KwezaPages.setInvoiceStep(2)">← Back</button>
+        <button class="btn btn-success" onclick="saveInvoice(${invoiceId})">💾 Save Invoice</button>
+      </div>
+    </div>
   renderInvLineItemRows(); recalcInvTotals();
 }
 
@@ -366,4 +424,4 @@ async function submitPayment(invoiceId) {
 async function deleteInvoice(id){if(!confirm('Delete this invoice?'))return;await window.KwezaDB.db.invoices.delete(id);showToast('Invoice deleted','info');renderInvoices();}
 
 window.KwezaPages=window.KwezaPages||{};
-Object.assign(window.KwezaPages,{renderInvoices,renderInvoiceDetail,renderInvoiceBuilder,addInvLineItem,removeInvLineItem,recalcInvTotals,recalcInvRow,openInvCatalogPicker,addInvFromCatalog,saveInvoice,openPaymentModal,submitPayment,deleteInvoice});
+Object.assign(window.KwezaPages,{renderInvoices,renderInvoiceDetail,renderInvoiceBuilder,addInvLineItem,removeInvLineItem,recalcInvTotals,recalcInvRow,openInvCatalogPicker,addInvFromCatalog,saveInvoice,openPaymentModal,submitPayment,deleteInvoice,setInvoiceStep});

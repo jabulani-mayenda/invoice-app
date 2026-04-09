@@ -306,8 +306,8 @@
 
 @media (max-width: 480px) {
   .builder-header .form-row { grid-template-columns: 1fr; }
-  .action-row .btn-ghost { display: none; } /* hide PDF/WA icons, keep View/Pay */
-  .action-row .btn-ghost:first-child { display: inline-flex; } /* keep View */
+  /* hide only the delete button on small screens to save space, keep PDF/View/Pay/WA */
+  .action-row .btn-ghost[title="Del"] { display: none; }
   .doc-amount { font-size: 16px; }
   .client-stats { gap: 10px; }
   .tabs { gap: 2px; }

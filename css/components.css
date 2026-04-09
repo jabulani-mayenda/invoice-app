@@ -273,7 +273,7 @@ body.offline .sidebar { top: 35px; }
   text-align: center;
   animation: slideUpFade 0.55s cubic-bezier(0.2,0.8,0.2,1);
   backdrop-filter: blur(20px);
-  position: relative; overflow: hidden;
+  position: relative;
 }
 /* Subtle shimmer line at top of card */
 .login-card::before {
@@ -373,6 +373,70 @@ body.offline .sidebar { top: 35px; }
 .text-muted { color: var(--text-muted); }
 .w-full { width: 100%; }
 
+/* ── CUSTOM SELECT ── */
+.custom-select { position: relative; user-select: none; font-size: 15px; text-align: left; }
+.custom-select-trigger {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 13px 14px; background: var(--bg-input); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px; color: var(--text-main); cursor: pointer; transition: 0.2s;
+}
+.custom-select-trigger:hover, .custom-select.open .custom-select-trigger {
+  background: rgba(0,151,167,0.05); border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(0,151,167,0.2);
+}
+.custom-select-trigger .arrow { font-size: 10px; color: var(--text-muted); transition: 0.2s; }
+.custom-select.open .custom-select-trigger .arrow { transform: rotate(180deg); }
+
+.custom-select-options {
+  position: absolute; top: calc(100% + 6px); left: 0; right: 0;
+  background: rgba(14, 28, 47, 0.95); backdrop-filter: blur(12px);
+  border: 1px solid rgba(0,151,167,0.2); border-radius: 8px;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.6); z-index: 99;
+  max-height: 240px; overflow-y: auto; display: none;
+  animation: slideDownFade 0.25s cubic-bezier(0.2,0.8,0.2,1);
+}
+.custom-select.open .custom-select-options { display: block; }
+.custom-select-option {
+  padding: 12px 14px; cursor: pointer; display: flex; align-items: center; gap: 8px;
+  color: var(--text-muted); transition: 0.2s; border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.custom-select-option:last-child { border-bottom: none; }
+.custom-select-option:hover, .custom-select-option.selected {
+  background: rgba(0,151,167,0.15); color: var(--text-main); font-weight: 500;
+}
+@keyframes slideDownFade { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ── WIZARD ── */
+.wizard-steps { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; position: relative; }
+.wizard-steps::before {
+  content: ''; position: absolute; top: 14px; left: 0; right: 0; height: 3px;
+  background: var(--border); z-index: 1; border-radius: 3px;
+}
+.wizard-step { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; }
+.wizard-step-circle {
+  width: 32px; height: 32px; border-radius: 50%; background: var(--bg-input);
+  border: 3px solid var(--bg-card); display: flex; align-items: center; justify-content: center;
+  font-weight: 700; color: var(--text-muted); font-size: 13px; transition: 0.3s;
+  box-shadow: 0 0 0 1px var(--border);
+}
+.wizard-step.active .wizard-step-circle { border-color: var(--bg-card); background: var(--primary); color: white; box-shadow: 0 0 0 4px rgba(0,151,167,0.3); }
+.wizard-step.completed .wizard-step-circle { border-color: var(--bg-card); background: var(--success); color: white; box-shadow: 0 0 0 1px var(--success); }
+.wizard-step-label { font-size: 12px; font-weight: 600; color: var(--text-muted); text-align: center; }
+.wizard-step.active .wizard-step-label { color: var(--text-main); }
+.wizard-content { display: none; animation: slideInStep 0.35s cubic-bezier(0.2,0.8,0.2,1); }
+.wizard-content.active { display: block; }
+@keyframes slideInStep { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+.wizard-actions { display: flex; justify-content: space-between; padding-top: 20px; border-top: 1px solid var(--border); margin-top: 32px; }
+
+/* ── WIZARD DESKTOP FLAT LAYOUT ── */
+@media (min-width: 769px) {
+  .wizard-steps { display: none !important; }
+  .wizard-actions { display: none !important; }
+  .wizard-content { display: block !important; opacity: 1 !important; transform: none !important; animation: none !important; margin-bottom: 24px; }
+  .builder-top-actions { display: flex !important; }
+}
+
+
 /* ── Animations ── */
 @keyframes slideInToast {
   0%   { transform: translateX(110%); opacity: 0; }
@@ -392,6 +456,9 @@ body.offline .sidebar { top: 35px; }
 @media (max-width: 768px) {
   .grid-2, .grid-3 { grid-template-columns: 1fr; }
 
+  /* Hide top actions when wizard is active */
+  .builder-top-actions { display: none !important; }
+
   /* Modal slides up from bottom on mobile */
   .modal {
     max-height: 92vh;
@@ -409,6 +476,36 @@ body.offline .sidebar { top: 35px; }
   .btn-sm { min-height: 36px; }
   .form-control { font-size: 16px !important; padding: 12px 14px !important; min-height: 48px; }
   select.form-control { padding-right: 40px !important; }
+
+  /* Wizard Mobile Tweaks */
+  .wizard-step-label { display: none; }
+  .wizard-steps::before { top: 16px; }
+  .wizard-step-circle { width: 36px; height: 36px; font-size: 14px; }
+
+  /* Mobile Card Layout for Line Items Table */
+  .line-items-table { display: block; width: 100%; }
+  .line-items-table thead { display: none; }
+  .line-items-table tbody { display: flex; flex-direction: column; gap: 16px; }
+  .line-items-table tbody tr {
+    display: flex; flex-direction: column; background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border); border-radius: 12px; padding: 16px; position: relative;
+    box-shadow: var(--shadow-sm);
+  }
+  .line-items-table tbody td { display: block; padding: 6px 0; border: none; text-align: left !important; }
+  .line-items-table tbody td:first-child input { font-weight: 600; font-size: 15px !important; }
+  .line-items-table tbody td::before { display: block; font-size: 11px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .line-items-table tbody td:nth-child(2)::before { content: 'Rate'; }
+  .line-items-table tbody td:nth-child(3)::before { content: 'Qty'; }
+  .line-items-table tbody td:nth-child(4)::before { content: 'Discount (%)'; }
+  
+  .line-items-table tbody td.amount-cell { 
+    font-size: 18px; font-weight: 700; color: var(--primary-light); 
+    margin-top: 12px; text-align: right !important; padding-top: 12px; 
+    border-top: 1px dashed rgba(255,255,255,0.1); 
+  }
+  .line-items-table tbody td.amount-cell::before { content: 'Total Amount'; text-align: right; }
+  
+  .line-items-table tbody td:last-child { position: absolute; top: 16px; right: 16px; padding: 0; }
 
   /* Toast at bottom center */
   #toast-container {

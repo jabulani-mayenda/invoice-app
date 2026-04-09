@@ -540,6 +540,7 @@ h4 { font-size: var(--text-lg);  font-weight: 600; }
   .topbar { padding: 0 14px; gap: 8px; }
   .page { padding: 14px 12px 80px; }
 
-  /* Keep buttons readable on mobile */
-  .page-header .btn { width: 100%; justify-content: center; }
+  /* Keep buttons readable on mobile, wrap them */
+  .page-header .flex { width: 100%; flex-wrap: wrap; }
+  .page-header .btn { flex: 1 1 45%; justify-content: center; min-width: 120px; }
 }

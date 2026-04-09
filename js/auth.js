@@ -86,13 +86,19 @@ function renderLoginScreen() {
         <div class="login-form">
           <div class="form-group">
             <label class="form-label">Department</label>
-            <select class="form-control" id="login-dept" onchange="window.KwezaAuth.onDeptChange()" style="font-size:15px;">
-              <option value="">— Select your department —</option>
-              ${DEFAULT_DEPARTMENTS.map(d => `<option value="${d.id}">${d.icon} ${d.department}</option>`).join('')}
-            </select>
+            <div class="custom-select" id="dept-custom-select">
+              <div class="custom-select-trigger" onclick="window.KwezaAuth.toggleDeptSelect()">
+                <span id="selected-dept-label">— Select your department —</span>
+                <span class="arrow">▼</span>
+              </div>
+              <div class="custom-select-options" id="dept-options">
+                ${DEFAULT_DEPARTMENTS.map(d => `<div class="custom-select-option" data-value="${d.id}" onclick="window.KwezaAuth.selectDept('${d.id}', '${d.icon} ${d.department}')">${d.icon} ${d.department}</div>`).join('')}
+              </div>
+            </div>
+            <input type="hidden" id="login-dept" value="" onchange="window.KwezaAuth.onDeptChange()">
           </div>
 
-          <div class="form-group" id="login-pass-grp" style="display:none;margin-top:4px;">
+          <div class="form-group" id="login-pass-grp" style="display:none;margin-top:16px;">
             <label class="form-label">Password</label>
             <div class="password-wrap">
               <input class="form-control" id="login-pass" type="password"
@@ -124,12 +130,37 @@ function renderLoginScreen() {
   document.getElementById('login-pass')?.addEventListener('keydown', e => {
     if (e.key === 'Enter') doLogin();
   });
+  
+  // Close the custom select when clicking outside
+  document.addEventListener('click', e => {
+    const customSelect = document.getElementById('dept-custom-select');
+    if (customSelect && !customSelect.contains(e.target)) {
+      customSelect.classList.remove('open');
+    }
+  });
 }
 
-function selectDept(deptId) {
-  const sel = document.getElementById('login-dept');
-  if (sel) { sel.value = deptId; onDeptChange(); }
-  setTimeout(() => document.getElementById('login-pass')?.focus(), 80);
+function toggleDeptSelect() {
+  const customSelect = document.getElementById('dept-custom-select');
+  if (customSelect) customSelect.classList.toggle('open');
+}
+
+function selectDept(deptId, label) {
+  const inp = document.getElementById('login-dept');
+  const labelEl = document.getElementById('selected-dept-label');
+  const customSelect = document.getElementById('dept-custom-select');
+  
+  if (inp) {
+    inp.value = deptId;
+    labelEl.innerHTML = label;
+    customSelect.classList.remove('open');
+    
+    // Update active visual state
+    document.querySelectorAll('.custom-select-option').forEach(el => el.classList.remove('selected'));
+    document.querySelector(`.custom-select-option[data-value="${deptId}"]`)?.classList.add('selected');
+    
+    onDeptChange();
+  }
 }
 
 function onDeptChange() {
@@ -175,6 +206,6 @@ async function doLogin() {
 window.KwezaAuth = {
   getCurrentUser, setCurrentUser, clearSession, isAdmin, getDeptFilter,
   seedDefaultUsers, attemptLogin, logout,
-  renderLoginScreen, selectDept, onDeptChange, togglePass, doLogin,
+  renderLoginScreen, selectDept, onDeptChange, togglePass, doLogin, toggleDeptSelect,
   DEFAULT_DEPARTMENTS
 };
