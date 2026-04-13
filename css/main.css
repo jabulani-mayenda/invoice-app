@@ -544,3 +544,31 @@ h4 { font-size: var(--text-lg);  font-weight: 600; }
   .page-header .flex { width: 100%; flex-wrap: wrap; }
   .page-header .btn { flex: 1 1 45%; justify-content: center; min-width: 120px; }
 }
+
+/* ── PWA Install FAB ── */
+.pwa-fab {
+  display: none;
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 150;
+  background: linear-gradient(135deg, var(--kweza-blue), var(--kweza-blue-light));
+  color: #fff;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 99px;
+  font-weight: 700;
+  font-size: var(--text-sm);
+  box-shadow: 0 4px 20px var(--kweza-blue-glow);
+  cursor: pointer;
+  font-family: var(--font);
+  transition: box-shadow var(--transition), transform var(--transition);
+}
+.pwa-fab:hover {
+  box-shadow: 0 6px 28px var(--kweza-blue-glow);
+  transform: translateX(-50%) translateY(-2px);
+}
+
+/* ── Hidden page utility (non-routed sections) ── */
+.page--hidden { display: none !important; }

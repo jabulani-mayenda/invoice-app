@@ -21,7 +21,7 @@ async function renderSettings() {
 
   document.getElementById('settings-page').innerHTML = `
     <div class="page-header">
-      <div class="page-header-left"><h2>Settings</h2><p>Configure your business profile</p></div>
+      <div class="page-header-left"><h2>Settings</h2><p>Configure the shared company profile used by every department</p></div>
       <button class="btn btn-primary" onclick="saveAllSettings()">💾 Save Settings</button>
     </div>
 
@@ -29,7 +29,7 @@ async function renderSettings() {
     <div class="settings-section">
       <div class="settings-section-header">
         <div class="section-icon">🎨</div>
-        <div><h3>Branding & Logo</h3><div class="card-subtitle">Your logo appears on all PDFs</div></div>
+        <div><h3>Branding & Logo</h3><div class="card-subtitle">Your logo and company details appear across quotations, invoices and the shared app shell</div></div>
       </div>
       <div class="settings-body">
         <div class="flex gap-20" style="align-items:flex-start;flex-wrap:wrap;">
@@ -254,9 +254,12 @@ async function saveAllSettings() {
     setSetting('defaults', newDefaults)
   ]);
   delete window._pendingLogo;
-  // Update sidebar logo
-  const sidebarLogo = document.getElementById('sidebar-logo-img');
-  if (sidebarLogo && newBranding.logo) sidebarLogo.src = newBranding.logo;
+  delete window._pendingSignature;
+  await window.KwezaApp?.applyBranding?.({
+    company: newCompany,
+    branding: newBranding,
+    defaults: newDefaults
+  });
   showToast('Settings saved!', 'success');
 }
 
@@ -279,13 +282,21 @@ async function exportAllData() {
   const data = {
     exportedAt: new Date().toISOString(),
     clients:     await db.clients.toArray(),
+    serviceRequests: await db.serviceRequests.toArray(),
+    sales:       await db.sales.toArray(),
     catalog:     await db.catalog.toArray(),
     quotations:  await db.quotations.toArray(),
     invoices:    await db.invoices.toArray(),
     lineItems:   await db.lineItems.toArray(),
     payments:    await db.payments.toArray(),
+    operationTasks: await db.operationTasks.toArray(),
+    projectReports: await db.projectReports.toArray(),
     loans:       await db.loans.toArray(),
     installments:await db.installments.toArray(),
+    departments: await db.departments.toArray(),
+    employees:   await db.employees.toArray(),
+    users:       await db.users.toArray(),
+    settings:    await db.settings.toArray(),
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
@@ -300,9 +311,13 @@ async function clearAllData() {
   if (!confirm('Last chance! This cannot be undone. Delete everything?')) return;
   const { db } = window.KwezaDB;
   await Promise.all([
-    db.clients.clear(), db.catalog.clear(), db.quotations.clear(),
-    db.invoices.clear(), db.lineItems.clear(), db.payments.clear(),
-    db.loans.clear(), db.installments.clear(), db.activity.clear()
+    db.clients.clear(), db.serviceRequests.clear(), db.sales.clear(),
+    db.catalog.clear(), db.quotations.clear(), db.invoices.clear(),
+    db.lineItems.clear(), db.payments.clear(), db.operationTasks.clear(),
+    db.projectReports.clear(),
+    db.loans.clear(), db.installments.clear(), db.activity.clear(),
+    db.departments.clear(), db.employees.clear(), db.users.clear(),
+    db.settings.clear()
   ]);
   showToast('All data cleared.', 'info');
   navigate('dashboard');

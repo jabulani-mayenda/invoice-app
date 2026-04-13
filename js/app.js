@@ -1,186 +1,275 @@
 /* ============================================
-   KWEZA – APP ROUTER & INITIALIZATION
+   KWEZA - APP ROUTER & INITIALIZATION
    ============================================ */
 
-// ── Global Toast ──
+let currentPage = 'dashboard';
+let currentSubpage = '';
+let cloudSyncTimer = null;
+
 function showToast(message, type = 'info') {
   const container = document.getElementById('toast-container');
   if (!container) return;
-  const icons = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
+
+  const icons = {
+    success: '✅',
+    error: '❌',
+    warning: '⚠️',
+    info: 'ℹ️'
+  };
+
   const toast = document.createElement('div');
   toast.className = `toast ${type}`;
   toast.innerHTML = `<span class="toast-icon">${icons[type] || 'ℹ️'}</span><span class="toast-msg">${message}</span>`;
   container.appendChild(toast);
-  setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateX(20px)'; toast.style.transition = '0.3s'; setTimeout(() => toast.remove(), 300); }, 3500);
+
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateX(20px)';
+    toast.style.transition = '0.3s';
+    setTimeout(() => toast.remove(), 300);
+  }, 3500);
 }
 window.showToast = showToast;
 
-// ── Modal ──
 function closeModal() {
   const overlay = document.getElementById('modal-overlay');
-  if (overlay) { overlay.classList.remove('active'); overlay.innerHTML = ''; }
+  if (overlay) {
+    overlay.classList.remove('active');
+    overlay.innerHTML = '';
+  }
 }
 window.closeModal = closeModal;
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
-document.addEventListener('click', e => {
-  const overlay = document.getElementById('modal-overlay');
-  if (overlay && e.target === overlay) closeModal();
+
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape') closeModal();
 });
 
-// ── ROUTER ──
+document.addEventListener('click', event => {
+  const overlay = document.getElementById('modal-overlay');
+  if (overlay && event.target === overlay) closeModal();
+});
+
 const ROUTES = {
-  dashboard:  () => window.KwezaPages.renderDashboard(),
-  clients:    () => window.KwezaPages.renderClients().then(() => window.KwezaPages.loadClientStats()),
-  catalog:    () => window.KwezaPages.renderCatalog(),
-  quotations: (sub) => window.KwezaPages.renderQuotations(sub),
-  invoices:   (sub) => window.KwezaPages.renderInvoices(sub),
-  loans:      (sub) => window.KwezaPages.renderLoans(sub),
-  reports:    () => window.KwezaPages.renderReports(),
-  settings:   () => window.KwezaPages.renderSettings(),
+  dashboard: () => window.KwezaPages.renderDashboard(),
+  clients: () => window.KwezaPages.renderClients().then(() => window.KwezaPages.loadClientStats()),
+  requests: () => window.KwezaPages.renderRequests(),
+  sales: () => window.KwezaPages.renderSales(),
+  catalog: () => window.KwezaPages.renderCatalog(),
+  organization: () => window.KwezaPages.renderOrganization(),
+  quotations: sub => window.KwezaPages.renderQuotations(sub),
+  invoices: sub => window.KwezaPages.renderInvoices(sub),
+  operations: () => window.KwezaPages.renderOperations(),
+  reports: () => window.KwezaPages.renderReports(),
+  settings: () => window.KwezaPages.renderSettings()
 };
 
 const PAGE_IDS = {
-  dashboard:  'dashboard-page',
-  clients:    'clients-page',
-  catalog:    'catalog-page',
+  dashboard: 'dashboard-page',
+  clients: 'clients-page',
+  requests: 'requests-page',
+  sales: 'sales-page',
+  catalog: 'catalog-page',
+  organization: 'organization-page',
   quotations: 'quotations-page',
-  invoices:   'invoices-page',
-  loans:      'loans-page',
-  reports:    'reports-page',
-  settings:   'settings-page',
+  invoices: 'invoices-page',
+  operations: 'operations-page',
+  reports: 'reports-page',
+  settings: 'settings-page'
 };
 
 const PAGE_TITLES = {
-  dashboard:  { title: 'Dashboard', sub: new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) },
-  clients:    { title: 'Clients', sub: 'Manage your client database' },
-  catalog:    { title: 'Catalog', sub: 'Products & services' },
-  quotations: { title: 'Quotations', sub: 'Create & manage quotations' },
-  invoices:   { title: 'Invoices', sub: 'Billing & payments' },
-  loans:      { title: 'Loan Tracker', sub: 'Track payments & balances' },
-  reports:    { title: 'Reports', sub: 'Export system data' },
-  settings:   { title: 'Settings', sub: 'Configure your app' },
+  dashboard: { title: 'Dashboard', sub: new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) },
+  clients: { title: 'Clients', sub: 'Manage your client database' },
+  requests: { title: 'Service Requests', sub: 'Entry point for all departments' },
+  sales: { title: 'Sales', sub: 'Commercial pipeline and conversion control' },
+  catalog: { title: 'Catalog', sub: 'Products and services shared across departments' },
+  organization: { title: 'Organization', sub: 'Shared departments and employees' },
+  quotations: { title: 'Quotations', sub: 'Create and manage quotations' },
+  invoices: { title: 'Invoices', sub: 'Billing and payments' },
+  operations: { title: 'Operations', sub: 'Service execution and delivery tasks' },
+  reports: { title: 'Reports', sub: 'Department progress, issues and completion reports' },
+  settings: { title: 'Settings', sub: 'Configure your app' }
 };
 
-let currentPage = 'dashboard';
+function getCurrentRoute() {
+  const hash = window.location.hash.replace(/^#/, '') || 'dashboard';
+  const parts = hash.split('/');
+  return {
+    hash,
+    page: parts[0] || 'dashboard',
+    subpage: parts.slice(1).join('/')
+  };
+}
 
-async function navigate(path) {
-  const parts   = path.split('/');
-  const page    = parts[0];
-  const subpage = parts.slice(1).join('/');
+function isEditingRoute(subpage) {
+  if (!subpage) return false;
+  return subpage === 'new' || subpage.endsWith('/edit');
+}
 
-  if (!ROUTES[page]) { navigate('dashboard'); return; }
+async function applyBranding(settings = null) {
+  const resolvedSettings = settings || await window.KwezaDB.getAllSettings();
+  const brandName = resolvedSettings.company?.name || 'Kweza MIS';
+  const brandTagline = resolvedSettings.company?.tagline || 'Sales, Billing and Operations';
+  const brandLogo = resolvedSettings.branding?.logo || './assets/logo.png';
+  const themeColor = resolvedSettings.branding?.primaryColor || '#1565C0';
 
-  Object.values(PAGE_IDS).forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.classList.remove('active');
+  const sidebarLogo = document.getElementById('sidebar-logo-img');
+  if (sidebarLogo) sidebarLogo.src = brandLogo;
+
+  const brandNameEl = document.getElementById('sidebar-brand-name');
+  if (brandNameEl) brandNameEl.textContent = brandName;
+
+  const brandTaglineEl = document.getElementById('sidebar-brand-tagline');
+  if (brandTaglineEl) brandTaglineEl.textContent = brandTagline;
+
+  document.title = brandName;
+
+  const themeMeta = document.querySelector('meta[name="theme-color"]');
+  if (themeMeta) themeMeta.setAttribute('content', themeColor);
+
+  document.querySelectorAll('link[rel="icon"], link[rel="apple-touch-icon"]').forEach(link => {
+    link.setAttribute('href', brandLogo);
   });
 
-  const targetId = PAGE_IDS[page];
-  const targetEl = document.getElementById(targetId);
-  if (targetEl) targetEl.classList.add('active');
+  return resolvedSettings;
+}
 
-  currentPage = page;
+async function loadAppSettings() {
+  return applyBranding();
+}
+
+function updateTopbar(page) {
+  const info = PAGE_TITLES[page] || { title: page, sub: '' };
+  const titleEl = document.getElementById('topbar-title');
+  const subEl = document.getElementById('topbar-subtitle');
+  if (titleEl) titleEl.textContent = info.title;
+  if (subEl) subEl.textContent = info.sub;
+}
+
+function updateSidebarNav(page) {
   document.querySelectorAll('.nav-item').forEach(item => {
     item.classList.toggle('active', item.dataset.page === page);
   });
+}
 
-  const info = PAGE_TITLES[page] || { title: page, sub: '' };
-  const titleEl = document.getElementById('topbar-title');
-  const subEl   = document.getElementById('topbar-subtitle');
-  if (titleEl) titleEl.textContent = info.title;
-  if (subEl)   subEl.textContent   = info.sub;
+function showActivePage(page) {
+  Object.values(PAGE_IDS).forEach(id => {
+    const element = document.getElementById(id);
+    if (element) element.classList.remove('active');
+  });
+
+  const target = document.getElementById(PAGE_IDS[page]);
+  if (target) target.classList.add('active');
+}
+
+async function navigate(path, options = {}) {
+  const parts = String(path || 'dashboard').split('/');
+  const page = parts[0] || 'dashboard';
+  const subpage = parts.slice(1).join('/');
+
+  if (!ROUTES[page]) {
+    await navigate('dashboard', options);
+    return;
+  }
+
+  currentPage = page;
+  currentSubpage = subpage;
+
+  showActivePage(page);
+  updateSidebarNav(page);
+  updateTopbar(page);
 
   const newHash = subpage ? `#${page}/${subpage}` : `#${page}`;
-  if (window.location.hash !== newHash) history.pushState(null, '', newHash);
+  if (!options.skipHistory && window.location.hash !== newHash) {
+    history.pushState(null, '', newHash);
+  }
 
   document.getElementById('sidebar')?.classList.remove('open');
   document.getElementById('sidebar-overlay')?.classList.remove('active');
 
   try {
+    await window.KwezaDB.refreshFromRemote();
+    await loadAppSettings();
+    await updateNavBadges();
     await ROUTES[page](subpage);
-  } catch (err) {
-    console.error(`[Kweza] Error rendering page "${page}":`, err);
-    const el = document.getElementById(targetId);
-    if (el) el.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠️</div><h3>Something went wrong</h3><p>${err.message}</p><button class="btn btn-primary mt-12" onclick="navigate('dashboard')">Go Home</button></div>`;
+  } catch (error) {
+    console.error(`[Kweza] Error rendering page "${page}":`, error);
+    const pageEl = document.getElementById(PAGE_IDS[page]);
+    if (pageEl) {
+      pageEl.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">⚠️</div>
+          <h3>Something went wrong</h3>
+          <p>${error.message}</p>
+          <button class="btn btn-primary mt-12" onclick="navigate('dashboard')">Go Home</button>
+        </div>
+      `;
+    }
   }
 }
 window.navigate = navigate;
 
-// ── Expose page functions globally ──
 function exposePageFunctions() {
   const pages = window.KwezaPages || {};
   Object.assign(window, pages);
   Object.assign(window, window.KwezaShare || {});
 }
 
-// ── PWA Install Prompt ──
-window.addEventListener('beforeinstallprompt', e => {
-  e.preventDefault();
-  window._pwaInstallEvent = e;
-  const btn = document.getElementById('pwa-install-btn');
-  if (btn) btn.style.display = 'inline-flex';
+window.addEventListener('beforeinstallprompt', event => {
+  event.preventDefault();
+  window._pwaInstallEvent = event;
+  const button = document.getElementById('pwa-install-btn');
+  if (button) button.style.display = 'inline-flex';
 });
 
-// ── Offline Detection ──
 function updateOnlineStatus() {
   document.body.classList.toggle('offline', !navigator.onLine);
-  if (!navigator.onLine) showToast('You are offline. Data is saved locally.', 'warning');
-  else showToast('Back online!', 'success');
+  if (!navigator.onLine) {
+    showToast('You are offline. Data is saved locally.', 'warning');
+  } else {
+    showToast('Back online!', 'success');
+  }
 }
-window.addEventListener('online',  () => updateOnlineStatus());
-window.addEventListener('offline', () => updateOnlineStatus());
+window.addEventListener('online', updateOnlineStatus);
+window.addEventListener('offline', updateOnlineStatus);
 
-// ── Service Worker ──
 async function registerSW() {
-  if ('serviceWorker' in navigator) {
-    try {
-      const reg = await navigator.serviceWorker.register('./sw.js');
-      console.log('[Kweza] SW registered:', reg.scope);
-    } catch (e) {
-      console.warn('[Kweza] SW failed:', e);
-    }
+  if (!('serviceWorker' in navigator)) return;
+
+  try {
+    const registration = await navigator.serviceWorker.register('./sw.js');
+    console.log('[Kweza] SW registered:', registration.scope);
+  } catch (error) {
+    console.warn('[Kweza] SW failed:', error);
   }
 }
 
-// ── Load Settings ──
-async function loadAppSettings() {
-  const { getAllSettings } = window.KwezaDB;
-  const settings = await getAllSettings();
-  if (settings.branding.logo) {
-    const img = document.getElementById('sidebar-logo-img');
-    if (img) img.src = settings.branding.logo;
-  }
-}
-
-// ── Mobile Menu ──
 function toggleMobileMenu() {
-  const sidebar  = document.getElementById('sidebar');
-  const overlay  = document.getElementById('sidebar-overlay');
-  sidebar?.classList.toggle('open');
-  overlay?.classList.toggle('active');
+  document.getElementById('sidebar')?.classList.toggle('open');
+  document.getElementById('sidebar-overlay')?.classList.toggle('active');
 }
 window.toggleMobileMenu = toggleMobileMenu;
 
-// ── Nav Badges ──
 async function updateNavBadges() {
   const { db } = window.KwezaDB;
   const deptId = window.KwezaAuth?.getDeptFilter?.();
-  let invoices;
-  if (deptId) {
-    invoices = await db.invoices.where('departmentId').equals(deptId).toArray();
-  } else {
-    invoices = await db.invoices.toArray();
+  const invoices = deptId
+    ? await db.invoices.where('departmentId').equals(deptId).toArray()
+    : await db.invoices.toArray();
+
+  const unpaid = invoices.filter(invoice => invoice.status !== 'paid').length;
+  const badge = document.getElementById('invoice-badge');
+  if (badge) {
+    badge.textContent = unpaid;
+    badge.style.display = unpaid > 0 ? 'inline' : 'none';
   }
-  const unpaid = invoices.filter(i => i.status !== 'paid').length;
-  const el = document.getElementById('invoice-badge');
-  if (el) { el.textContent = unpaid; el.style.display = unpaid > 0 ? 'inline' : 'none'; }
 }
 
-// ── Sidebar User Panel ──
 function updateSidebarUser(user) {
-  const el = document.getElementById('sidebar-user');
-  if (!el || !user) return;
-  el.innerHTML = `
+  const container = document.getElementById('sidebar-user');
+  if (!container || !user) return;
+
+  container.innerHTML = `
     <div class="sidebar-user-inner">
       <div class="user-avatar" style="background:${user.color || '#1565C0'}">
         ${user.icon || '👤'}
@@ -189,71 +278,103 @@ function updateSidebarUser(user) {
         <div class="user-name-text">${user.name}</div>
         <div class="user-dept-text">${user.department}${user.role === 'admin' ? ' <span class="admin-tag">ADMIN</span>' : ''}</div>
       </div>
-      <button class="logout-btn" onclick="window.KwezaAuth.logout()" title="Sign Out">⏏</button>
+      <button class="logout-btn" onclick="window.KwezaAuth.logout()" title="Sign Out">⏻</button>
     </div>
   `;
 }
 
-// ── Full App Initialization (post-login) ──
+function startCloudSync() {
+  if (cloudSyncTimer) clearInterval(cloudSyncTimer);
+
+  const config = window.KwezaSupabase?.getConfig?.();
+  if (!config?.url || !config?.anonKey) return;
+
+  cloudSyncTimer = window.setInterval(async () => {
+    if (document.hidden) return;
+
+    try {
+      const synced = await window.KwezaDB.refreshFromRemote({ force: true });
+      if (!synced) return;
+
+      await loadAppSettings();
+      await updateNavBadges();
+
+      const modalOpen = document.getElementById('modal-overlay')?.classList.contains('active');
+      if (modalOpen || isEditingRoute(currentSubpage)) return;
+
+      await ROUTES[currentPage]?.(currentSubpage);
+    } catch (error) {
+      console.warn('[Kweza] Background sync skipped:', error);
+    }
+  }, 20000);
+}
+
 async function initApp(user) {
   registerSW();
   exposePageFunctions();
   updateSidebarUser(user);
   await loadAppSettings();
   await updateNavBadges();
+  startCloudSync();
 
   setTimeout(async () => {
-    try { await window.KwezaReminders.runReminderCheck(); } catch(e) { /* silent */ }
+    try {
+      await window.KwezaReminders.runReminderCheck();
+    } catch {
+      // ignore reminder errors
+    }
   }, 3000);
 
-  // Hide settings and reports from non-admins
   const settingsItem = document.querySelector('.nav-item[data-page="settings"]');
-  if (settingsItem) {
-    settingsItem.style.display = user.role === 'admin' ? 'flex' : 'none';
-  }
+  if (settingsItem) settingsItem.style.display = user.role === 'admin' ? 'flex' : 'none';
+
   const reportsItem = document.querySelector('.nav-item[data-page="reports"]');
-  if (reportsItem) {
-    reportsItem.style.display = user.role === 'admin' ? 'flex' : 'none';
+  if (reportsItem) reportsItem.style.display = 'flex';
+
+  const route = getCurrentRoute();
+  await navigate(route.hash, { skipHistory: true });
+
+  if (!window._kwezaPopstateBound) {
+    window._kwezaPopstateBound = true;
+    window.addEventListener('popstate', () => {
+      const currentRoute = getCurrentRoute();
+      navigate(currentRoute.hash, { skipHistory: true });
+    });
   }
 
-  const hash = window.location.hash.replace('#', '') || 'dashboard';
-  await navigate(hash);
-
-  window.addEventListener('popstate', () => {
-    const h = window.location.hash.replace('#', '') || 'dashboard';
-    navigate(h);
-  });
-
-  // Update topbar date
   const dateEl = document.getElementById('topbar-date');
-  if (dateEl) dateEl.textContent = new Date().toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', year:'numeric' });
+  if (dateEl) {
+    dateEl.textContent = new Date().toLocaleDateString('en-GB', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    });
+  }
 }
 
-// ── Boot Sequence ──
 async function init() {
-  // Open DB first
   await window.KwezaDB.db.open();
-
-  // Seed default department accounts
   await window.KwezaAuth.seedDefaultUsers();
 
-  // Check existing session
   const user = window.KwezaAuth.getCurrentUser();
-
   if (!user) {
-    // Show login — auth module will call _kwezaAfterLogin on success
-    window.KwezaAuth.renderLoginScreen();
+    await window.KwezaAuth.renderLoginScreen();
     return;
   }
 
-  // Already logged in — go straight to app
   await initApp(user);
 }
 
-// Callback invoked by auth.js after successful login
-window._kwezaAfterLogin = async (user) => {
+window._kwezaAfterLogin = async user => {
   exposePageFunctions();
   await initApp(user);
+};
+
+window.KwezaApp = {
+  applyBranding,
+  loadAppSettings,
+  updateNavBadges
 };
 
 document.addEventListener('DOMContentLoaded', init);
