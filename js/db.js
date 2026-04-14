@@ -308,22 +308,55 @@ async function remoteDeleteByFilters(tableName, filters) {
   });
 }
 
-function createCollectionWrapper(tableName, collection, filters = []) {
+/* ── CLOUD-FIRST COLLECTION WRAPPER ──────────────────────────────
+   toArray() fetches live from Supabase and updates local cache.
+   Falls back to IndexedDB only when offline / Supabase unavailable.
+   ──────────────────────────────────────────────────────────────── */
+function createCollectionWrapper(tableName, localCollection, filters = [], orderSpec = null, limitVal = null) {
   return {
-    toArray: async () => collection.toArray(),
-    first: async () => collection.first(),
-    count: async () => collection.count(),
-    reverse: () => createCollectionWrapper(tableName, collection.reverse(), filters),
-    limit: value => createCollectionWrapper(tableName, collection.limit(value), filters),
-    delete: async () => {
-      if (syncState.enabled && filters.length) {
+    async toArray() {
+      if (syncState.enabled) {
         try {
-          await remoteDeleteByFilters(tableName, filters);
-        } catch (error) {
-          reportCloudIssue(error);
+          const opts = { method: 'GET', filters };
+          if (orderSpec) { opts.orderBy = orderSpec.field; opts.ascending = orderSpec.ascending; }
+          if (limitVal)  { opts.limit = limitVal; }
+          const rows = await remoteRequest(tableName, opts);
+          if (rows) {
+            // Silently update local cache for offline resilience
+            rawDb.table(tableName).bulkPut(rows.map(cleanRecord)).catch(() => {});
+            return rows;
+          }
+        } catch (err) {
+          console.warn(`[Kweza] Remote read failed for ${tableName}, falling back to local cache:`, err.message);
         }
       }
-      return collection.delete();
+      return localCollection.toArray();
+    },
+    async first() {
+      const rows = await this.toArray();
+      return rows[0];
+    },
+    async count() {
+      if (syncState.enabled) {
+        try {
+          const rows = await remoteRequest(tableName, { method: 'GET', filters, select: 'id' });
+          if (rows) return rows.length;
+        } catch {}
+      }
+      return localCollection.count();
+    },
+    reverse() {
+      const base = orderSpec || { field: TABLE_CONFIG[tableName]?.pk || 'id', ascending: true };
+      return createCollectionWrapper(tableName, localCollection.reverse(), filters, { field: base.field, ascending: !base.ascending }, limitVal);
+    },
+    limit(value) {
+      return createCollectionWrapper(tableName, localCollection.limit(value), filters, orderSpec, value);
+    },
+    async delete() {
+      if (syncState.enabled && filters.length) {
+        try { await remoteDeleteByFilters(tableName, filters); } catch (err) { reportCloudIssue(err); }
+      }
+      return localCollection.delete();
     }
   };
 }
@@ -349,28 +382,65 @@ function createWhereWrapper(tableName, fieldName) {
 }
 
 function createTableWrapper(tableName) {
-  const config = TABLE_CONFIG[tableName];
-  const table = rawDb.table(tableName);
+  const config  = TABLE_CONFIG[tableName];
+  const rawTable = rawDb.table(tableName);
+
+  // ── Helper: cache one row silently ──
+  function cacheRow(row) {
+    if (row) rawTable.put(cleanRecord(row)).catch(() => {});
+  }
 
   return {
+    /* ── READ: always live from Supabase ── */
     async get(id) {
-      return table.get(id);
+      if (syncState.enabled) {
+        try {
+          const rows = await remoteRequest(tableName, {
+            method: 'GET',
+            filters: [{ field: config.pk, op: 'eq', value: id }]
+          });
+          if (rows && rows.length) { cacheRow(rows[0]); return rows[0]; }
+        } catch (err) {
+          console.warn(`[Kweza] Remote get failed for ${tableName}#${id}:`, err.message);
+        }
+      }
+      return rawTable.get(id);
     },
+    async toArray() {
+      if (syncState.enabled) {
+        try {
+          const rows = await remoteRequest(tableName, { method: 'GET' });
+          if (rows) {
+            rawTable.clear().then(() => rawTable.bulkPut(rows.map(cleanRecord))).catch(() => {});
+            return rows;
+          }
+        } catch (err) {
+          console.warn(`[Kweza] Remote toArray failed for ${tableName}:`, err.message);
+        }
+      }
+      return rawTable.toArray();
+    },
+    async count() {
+      if (syncState.enabled) {
+        try {
+          const rows = await remoteRequest(tableName, { method: 'GET', select: config.pk });
+          if (rows) return rows.length;
+        } catch {}
+      }
+      return rawTable.count();
+    },
+
+    /* ── WRITE: Supabase first, local cache updated after ── */
     async add(data) {
       const record = cleanRecord(data);
       if (syncState.enabled) {
         try {
           const rows = await remoteInsert(tableName, record);
           const inserted = Array.isArray(rows) ? rows[0] : rows;
-          if (inserted) {
-            await table.put(inserted);
-            return inserted[config.pk];
-          }
-        } catch (error) {
-          reportCloudIssue(error);
-        }
+          if (inserted) { cacheRow(inserted); return inserted[config.pk]; }
+        } catch (error) { reportCloudIssue(error); }
       }
-      return table.add(record);
+      return rawTable.add(record);
     },
     async put(data) {
       const record = cleanRecord(data);
@@ -378,15 +448,10 @@ function createTableWrapper(tableName) {
         try {
           const rows = await remoteUpsert(tableName, record);
           const inserted = Array.isArray(rows) ? rows[0] : rows;
-          if (inserted) {
-            await table.put(inserted);
-            return inserted[config.pk];
-          }
-        } catch (error) {
-          reportCloudIssue(error);
-        }
+          if (inserted) { cacheRow(inserted); return inserted[config.pk]; }
+        } catch (error) { reportCloudIssue(error); }
       }
-      return table.put(record);
+      return rawTable.put(record);
     },
     async update(id, changes) {
       const payload = cleanRecord(changes);
@@ -394,44 +459,30 @@ function createTableWrapper(tableName) {
         try {
           const rows = await remotePatch(tableName, id, payload);
           const updated = Array.isArray(rows) ? rows[0] : rows;
-          if (updated) {
-            await table.put(updated);
-            return 1;
-          }
-        } catch (error) {
-          reportCloudIssue(error);
-        }
+          if (updated) { cacheRow(updated); return 1; }
+        } catch (error) { reportCloudIssue(error); }
       }
-      return table.update(id, payload);
+      return rawTable.update(id, payload);
     },
     async delete(id) {
       if (syncState.enabled) {
-        try {
-          await remoteDeleteByFilters(tableName, [{ field: config.pk, op: 'eq', value: id }]);
-        } catch (error) {
-          reportCloudIssue(error);
-        }
+        try { await remoteDeleteByFilters(tableName, [{ field: config.pk, op: 'eq', value: id }]); }
+        catch (error) { reportCloudIssue(error); }
       }
-      return table.delete(id);
+      return rawTable.delete(id);
     },
     async clear() {
       if (syncState.enabled) {
         try {
-          const rows = await table.toArray();
-          for (const row of rows) {
-            await remoteDeleteByFilters(tableName, [{ field: config.pk, op: 'eq', value: row[config.pk] }]);
+          const rows = await remoteRequest(tableName, { method: 'GET', select: config.pk });
+          if (rows && rows.length) {
+            for (const row of rows) {
+              await remoteDeleteByFilters(tableName, [{ field: config.pk, op: 'eq', value: row[config.pk] }]);
+            }
           }
-        } catch (error) {
-          reportCloudIssue(error);
-        }
+        } catch (error) { reportCloudIssue(error); }
       }
-      return table.clear();
-    },
-    async count() {
-      return table.count();
-    },
-    async toArray() {
-      return table.toArray();
+      return rawTable.clear();
     },
     async bulkAdd(items) {
       const payload = items.map(cleanRecord);
@@ -439,43 +490,54 @@ function createTableWrapper(tableName) {
         try {
           const rows = await remoteInsert(tableName, payload);
           if (Array.isArray(rows) && rows.length) {
-            await table.bulkPut(rows);
+            await rawTable.bulkPut(rows.map(cleanRecord));
             return rows.length;
           }
-        } catch (error) {
-          reportCloudIssue(error);
-        }
+        } catch (error) { reportCloudIssue(error); }
       }
-      return table.bulkAdd(payload);
+      return rawTable.bulkAdd(payload);
     },
+    async bulkPut(items) {
+      const payload = items.map(cleanRecord);
+      if (syncState.enabled && payload.length) {
+        try { await remoteUpsert(tableName, payload); } catch (error) { reportCloudIssue(error); }
+      }
+      return rawTable.bulkPut(payload);
+    },
+
+    /* ── QUERY BUILDERS ── */
     orderBy(fieldName) {
-      return table.orderBy(fieldName);
+      return createCollectionWrapper(
+        tableName,
+        rawTable.orderBy(fieldName),
+        [],
+        { field: fieldName, ascending: true }
+      );
     },
     where(query) {
-      if (typeof query === 'string') {
-        return createWhereWrapper(tableName, query);
-      }
-
-      const filters = Object.entries(query || {}).map(([field, value]) => ({ field, op: 'eq', value }));
-      const collection = table.toCollection().filter(row =>
+      if (typeof query === 'string') return createWhereWrapper(tableName, query);
+      const filters    = Object.entries(query || {}).map(([field, value]) => ({ field, op: 'eq', value }));
+      const collection = rawTable.toCollection().filter(row =>
         Object.entries(query || {}).every(([field, value]) => row[field] === value)
       );
       return createCollectionWrapper(tableName, collection, filters);
+    },
+    toCollection() {
+      return createCollectionWrapper(tableName, rawTable.toCollection(), []);
     }
   };
 }
 
 const db = {
   async open() {
+    // Enable cloud sync if Supabase is configured
     syncState.enabled = isCloudEnabled();
     await rawDb.open();
-    if (syncState.enabled) {
-      await refreshFromRemote({ force: true });
-    }
+    // Seed local defaults (settings, departments) — only used as offline fallback
     await seedLocalDefaults();
     if (syncState.enabled) {
-      await seedCloudDefaults();
-      await refreshFromRemote({ force: true });
+      // Seed cloud defaults silently — don't block app startup
+      seedCloudDefaults().catch(err => console.warn('[Kweza] seedCloudDefaults skipped:', err.message));
     }
   }
 };
