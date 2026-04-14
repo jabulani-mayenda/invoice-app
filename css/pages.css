@@ -306,10 +306,140 @@
 
 @media (max-width: 480px) {
   .builder-header .form-row { grid-template-columns: 1fr; }
-  /* hide only the delete button on small screens to save space, keep PDF/View/Pay/WA */
   .action-row .btn-ghost[title="Del"] { display: none; }
   .doc-amount { font-size: 16px; }
   .client-stats { gap: 10px; }
   .tabs { gap: 2px; }
   .tab-btn { padding: 8px 10px; font-size: 12px; }
 }
+
+/* ============================================================
+   PHASE 5 — NEW FEATURE STYLES
+   Leads · Projects · QA · Role Tags · Progress Bars
+   ============================================================ */
+
+/* ── Stats Grid (compact KPI row) ── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+}
+.stats-grid .stat-card {
+  padding: 16px;
+  border-left: 3px solid var(--border);
+}
+.stats-grid .stat-card .stat-value {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+.stats-grid .stat-card .stat-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-top: 4px;
+}
+
+/* ── Project Status Doc-card accents ── */
+.proj-card[data-proj-status="Active"]::before       { background: #1565C0 !important; }
+.proj-card[data-proj-status="In Progress"]::before  { background: #E65100 !important; }
+.proj-card[data-proj-status="QA"]::before           { background: #6A1B9A !important; }
+.proj-card[data-proj-status="Revision"]::before     { background: #C62828 !important; }
+.proj-card[data-proj-status="Completed"]::before    { background: #2E7D32 !important; }
+
+/* ── Lead Status Doc-card accents ── */
+.lead-card[data-lead-status="New"]::before           { background: #1565C0 !important; }
+.lead-card[data-lead-status="Contacted"]::before     { background: #E65100 !important; }
+.lead-card[data-lead-status="Qualified"]::before     { background: #6A1B9A !important; }
+.lead-card[data-lead-status="Converted"]::before     { background: #2E7D32 !important; }
+.lead-card[data-lead-status="Lost"]::before          { background: #607D8B !important; }
+
+/* ── project_created invoice status badge ── */
+.badge-project { 
+  background: rgba(46,125,50,0.12); 
+  color: #4CAF50; 
+  border: 1px solid rgba(46,125,50,0.3); 
+}
+
+/* ── QA result colours ── */
+.qa-pass { color: #2E7D32; }
+.qa-fail { color: #C62828; }
+.qa-conditional { color: #E65100; }
+
+/* ── Role tag (sidebar user widget) ── */
+.admin-tag {
+  background: rgba(255,179,0,0.18);
+  color: var(--kweza-gold);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+/* ── Inline progress bar ── */
+.progress-bar-wrap {
+  background: var(--border);
+  border-radius: 8px;
+  height: 8px;
+  overflow: hidden;
+  width: 100%;
+}
+.progress-bar-fill {
+  height: 100%;
+  border-radius: 8px;
+  transition: width 0.5s cubic-bezier(0.22,0.61,0.36,1);
+}
+
+/* ── Filter bar ── */
+.filter-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+/* ── Project detail tab panels ── */
+#panel-milestones,
+#panel-reports,
+#panel-qa { animation: fadeInTab 0.25s ease both; }
+@keyframes fadeInTab {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Notification items in dashboard ── */
+.notif-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--danger);
+  flex-shrink: 0;
+  animation: pulse-badge 2s ease infinite;
+}
+
+/* ── QA readiness checklist row ── */
+.readiness-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  padding: 12px;
+  background: rgba(255,255,255,0.02);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+
+/* ── Mobile: stats-grid collapses to 2 cols ── */
+@media (max-width: 600px) {
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 400px) {
+  .stats-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .stats-grid .stat-card .stat-value { font-size: 18px; }
+}
+

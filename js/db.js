@@ -3,6 +3,8 @@
    ============================================ */
 
 const rawDb = new Dexie('KwezaInvoiceDB');
+
+// v6 — existing schema (preserved for upgrade path)
 rawDb.version(6).stores({
   clients: '++id, clientCode, name, phone, email, company, source, address, createdAt, departmentId',
   serviceRequests: '++id, requestCode, clientId, departmentId, service, status, createdAt',
@@ -23,24 +25,68 @@ rawDb.version(6).stores({
   employees: '++id, fullName, departmentId, position, email, phone, status, createdAt'
 });
 
+// v7 — upgraded schema with new tables
+rawDb.version(7).stores({
+  clients:            '++id, clientCode, name, phone, email, company, source, address, createdAt, departmentId, leadId',
+  serviceRequests:    '++id, requestCode, clientId, departmentId, service, status, createdAt',
+  sales:              '++id, saleCode, requestId, clientId, leadId, service, total, status, assignedDepartmentId, createdAt',
+  catalog:            '++id, name, category, price, description, unit, departmentId',
+  quotations:         '++id, clientId, saleId, number, date, validityDays, status, subtotal, discount, tax, total, currency, notes, departmentId, approvedBy, approvedAt',
+  invoices:           '++id, quotationId, clientId, saleId, projectId, number, date, dueDate, status, subtotal, discount, tax, total, currency, notes, departmentId',
+  lineItems:          '++id, docType, docId, description, rate, qty, discount, amount, catalogId',
+  payments:           '++id, invoiceId, date, amount, method, notes, recordedBy',
+  operationTasks:     '++id, taskCode, saleId, projectId, departmentId, task, status, createdAt',
+  projectReports:     '++id, reportCode, departmentId, saleId, invoiceId, taskId, type, status, date',
+  loans:              '++id, clientId, amount, balance, date, dueDate, status, description, interestRate, departmentId',
+  installments:       '++id, loanId, dueDate, amount, paid, paidDate',
+  settings:           'key',
+  activity:           '++id, type, description, amount, date, refId, refType',
+  users:              'id, name, department, role, passwordHash, isActive',
+  departments:        'id, name, code, createdAt',
+  employees:          '++id, fullName, departmentId, position, email, phone, status, createdAt',
+  // ─── NEW TABLES ───
+  leads:              '++id, leadCode, name, company, phone, email, source, status, assignedDeptId, clientId, departmentId, createdAt',
+  projects:           '++id, projectCode, invoiceId, clientId, saleId, name, status, departmentId, startDate, dueDate, createdAt',
+  projectTasks:       '++id, taskCode, projectId, departmentId, assignedTo, task, status, dueDate, createdAt',
+  projectMilestones:  '++id, projectId, title, status, dueDate, createdAt',
+  departmentReports:  '++id, reportCode, departmentId, projectId, saleId, type, status, date, submittedBy',
+  qaReviews:          '++id, projectId, reviewerId, reviewerDept, result, createdAt',
+  notifications:      '++id, userId, deptId, type, isRead, createdAt, refId, refType',
+  auditLogs:          '++id, userId, action, tableName, recordId, createdAt',
+  sessionTokens:      '++id, userId, token, expiresAt, createdAt'
+}).upgrade(tx => {
+  // No destructive changes — all new columns are nullable
+  return tx.table('settings').toCollection().count();
+});
+
 const TABLE_CONFIG = {
-  clients: { pk: 'id', remote: 'clients' },
-  serviceRequests: { pk: 'id', remote: 'service_requests' },
-  sales: { pk: 'id', remote: 'sales' },
-  catalog: { pk: 'id', remote: 'catalog' },
-  quotations: { pk: 'id', remote: 'quotations' },
-  invoices: { pk: 'id', remote: 'invoices' },
-  lineItems: { pk: 'id', remote: 'line_items' },
-  payments: { pk: 'id', remote: 'payments' },
-  operationTasks: { pk: 'id', remote: 'operation_tasks' },
-  projectReports: { pk: 'id', remote: 'project_reports' },
-  loans: { pk: 'id', remote: 'loans' },
-  installments: { pk: 'id', remote: 'installments' },
-  settings: { pk: 'key', remote: 'settings' },
-  activity: { pk: 'id', remote: 'activity' },
-  users: { pk: 'id', remote: 'users' },
-  departments: { pk: 'id', remote: 'departments' },
-  employees: { pk: 'id', remote: 'employees' }
+  clients:           { pk: 'id',  remote: 'clients' },
+  serviceRequests:   { pk: 'id',  remote: 'service_requests' },
+  sales:             { pk: 'id',  remote: 'sales' },
+  catalog:           { pk: 'id',  remote: 'catalog' },
+  quotations:        { pk: 'id',  remote: 'quotations' },
+  invoices:          { pk: 'id',  remote: 'invoices' },
+  lineItems:         { pk: 'id',  remote: 'line_items' },
+  payments:          { pk: 'id',  remote: 'payments' },
+  operationTasks:    { pk: 'id',  remote: 'operation_tasks' },
+  projectReports:    { pk: 'id',  remote: 'project_reports' },
+  loans:             { pk: 'id',  remote: 'loans' },
+  installments:      { pk: 'id',  remote: 'installments' },
+  settings:          { pk: 'key', remote: 'settings' },
+  activity:          { pk: 'id',  remote: 'activity' },
+  users:             { pk: 'id',  remote: 'users' },
+  departments:       { pk: 'id',  remote: 'departments' },
+  employees:         { pk: 'id',  remote: 'employees' },
+  // ─── NEW ───
+  leads:             { pk: 'id',  remote: 'leads' },
+  projects:          { pk: 'id',  remote: 'projects' },
+  projectTasks:      { pk: 'id',  remote: 'project_tasks' },
+  projectMilestones: { pk: 'id',  remote: 'project_milestones' },
+  departmentReports: { pk: 'id',  remote: 'department_reports' },
+  qaReviews:         { pk: 'id',  remote: 'qa_reviews' },
+  notifications:     { pk: 'id',  remote: 'notifications' },
+  auditLogs:         { pk: 'id',  remote: 'audit_logs' },
+  sessionTokens:     { pk: 'id',  remote: 'session_tokens' }
 };
 
 const SYNC_TABLES = Object.keys(TABLE_CONFIG);
@@ -796,14 +842,16 @@ async function seedLocalDefaults() {
   const settingsRows = await rawDb.table('settings').count();
   if (settingsRows === 0) {
     await rawDb.table('settings').bulkPut([
-      { key: 'company', value: DEFAULT_SETTINGS.company },
-      { key: 'branding', value: DEFAULT_SETTINGS.branding },
-      { key: 'defaults', value: DEFAULT_SETTINGS.defaults },
-      { key: 'clientNumberSeq', value: 1 },
+      { key: 'company',          value: DEFAULT_SETTINGS.company },
+      { key: 'branding',         value: DEFAULT_SETTINGS.branding },
+      { key: 'defaults',         value: DEFAULT_SETTINGS.defaults },
+      { key: 'clientNumberSeq',  value: 1 },
       { key: 'requestNumberSeq', value: 1 },
-      { key: 'saleNumberSeq', value: 1 },
-      { key: 'taskNumberSeq', value: 1 },
-      { key: 'reportNumberSeq', value: 1 }
+      { key: 'saleNumberSeq',    value: 1 },
+      { key: 'taskNumberSeq',    value: 1 },
+      { key: 'reportNumberSeq',  value: 1 },
+      { key: 'leadNumberSeq',    value: 1 },
+      { key: 'projectNumberSeq', value: 1 }
     ]);
   }
 
@@ -815,17 +863,230 @@ async function seedLocalDefaults() {
   }
 }
 
+/* ─── DEPT-SCOPED QUERY HELPER ───────────────────────────────── */
+/**
+ * Returns all records from a table, filtered by departmentId if the
+ * current user is not admin. Admin sees everything.
+ * @param {string} tableName — Dexie table name
+ * @param {string} [deptField='departmentId'] — field to filter on
+ */
+async function getDeptScoped(tableName, deptField = 'departmentId') {
+  const table  = db[tableName];
+  const user   = window.KwezaAuth?.getCurrentUser?.();
+  const isAdmin = user?.role === 'admin';
+  if (isAdmin || !user) return table.toArray();
+  return table.where(deptField).equals(user.id).toArray();
+}
+
+/* ─── AUDIT LOGGING ──────────────────────────────────────────── */
+async function logAudit(action, tableName, recordId, before = null, after = null) {
+  const user = window.KwezaAuth?.getCurrentUser?.();
+  try {
+    await db.auditLogs.add({
+      userId:    user?.id   || 'system',
+      userDept:  user?.department || '',
+      action,
+      tableName,
+      recordId:  String(recordId || ''),
+      diff:      (before || after) ? { before, after } : null,
+      createdAt: new Date().toISOString()
+    });
+  } catch {
+    // non-critical
+  }
+}
+
+/* ─── LEAD FUNCTIONS ─────────────────────────────────────────── */
+async function createLead(data) {
+  const leadCode = data.leadCode || await getNextSequenceCode('leadNumberSeq', 'LEAD');
+  const id = await db.leads.add({
+    ...data,
+    leadCode,
+    status:    data.status    || 'New',
+    createdAt: data.createdAt || new Date().toISOString()
+  });
+  if (!data.leadCode) await incrementSequence('leadNumberSeq');
+  await logAudit('create', 'leads', id, null, data);
+  return { ...(await db.leads.get(id)) };
+}
+
+async function convertLeadToClient(leadId, clientData) {
+  const lead = await db.leads.get(leadId);
+  if (!lead) throw new Error('Lead not found.');
+
+  const client = await createClientRecord({
+    ...clientData,
+    name:    clientData.name    || lead.name,
+    company: clientData.company || lead.company,
+    phone:   clientData.phone   || lead.phone,
+    email:   clientData.email   || lead.email,
+    source:  lead.source,
+    leadId
+  });
+
+  await db.leads.update(leadId, {
+    status:      'Converted',
+    clientId:    client.id,
+    convertedAt: new Date().toISOString()
+  });
+
+  await logAudit('update', 'leads', leadId, { status: lead.status }, { status: 'Converted', clientId: client.id });
+  return client;
+}
+
+/* ─── PROJECT FUNCTIONS ──────────────────────────────────────── */
+async function createProject(data) {
+  const projectCode = data.projectCode || await getNextSequenceCode('projectNumberSeq', 'PRJ');
+  const id = await db.projects.add({
+    ...data,
+    projectCode,
+    status:    data.status    || 'Pending',
+    createdAt: data.createdAt || new Date().toISOString(),
+    createdBy: data.createdBy || window.KwezaAuth?.getCurrentUser?.()?.id || ''
+  });
+  if (!data.projectCode) await incrementSequence('projectNumberSeq');
+
+  // Update linked invoice to project_created status
+  if (data.invoiceId) {
+    await db.invoices.update(data.invoiceId, { projectId: id, status: 'project_created' });
+  }
+
+  await logAudit('create', 'projects', id, null, data);
+
+  // Notify relevant dept
+  await createNotification({
+    deptId:  data.departmentId,
+    type:    'action',
+    title:   'New Project Assigned',
+    message: `Project ${projectCode} has been created and assigned to your department.`,
+    refId:   id,
+    refType: 'project'
+  });
+
+  return { ...(await db.projects.get(id)) };
+}
+
+async function getProjectWithDetails(projectId) {
+  const [project, tasks, milestones, reports, qaReviews] = await Promise.all([
+    db.projects.get(projectId),
+    db.projectTasks.where('projectId').equals(projectId).toArray(),
+    db.projectMilestones.where('projectId').equals(projectId).toArray(),
+    db.departmentReports.where('projectId').equals(projectId).toArray(),
+    db.qaReviews.where('projectId').equals(projectId).toArray()
+  ]);
+  return { ...project, tasks, milestones, reports, qaReviews };
+}
+
+/**
+ * Check if a project can be completed:
+ * - all tasks must be Done
+ * - at least one Completion report submitted
+ * - QA must have a passing review
+ */
+async function canCompleteProject(projectId) {
+  const [tasks, reports, qaReviews] = await Promise.all([
+    db.projectTasks.where('projectId').equals(projectId).toArray(),
+    db.departmentReports.where('projectId').equals(projectId).toArray(),
+    db.qaReviews.where('projectId').equals(projectId).toArray()
+  ]);
+
+  const allTasksDone    = tasks.length > 0 && tasks.every(t => t.status === 'Done');
+  const hasCompletionReport = reports.some(r => r.type === 'Completion');
+  const qaApproved      = qaReviews.some(r => r.result === 'pass');
+
+  return {
+    canComplete: allTasksDone && hasCompletionReport && qaApproved,
+    allTasksDone,
+    hasCompletionReport,
+    qaApproved,
+    taskCount:   tasks.length,
+    doneCount:   tasks.filter(t => t.status === 'Done').length
+  };
+}
+
+async function completeProject(projectId) {
+  const check = await canCompleteProject(projectId);
+  if (!check.canComplete) {
+    const reasons = [];
+    if (!check.allTasksDone)         reasons.push('Not all tasks are done');
+    if (!check.hasCompletionReport)  reasons.push('No completion report submitted');
+    if (!check.qaApproved)           reasons.push('QA has not approved this project');
+    throw new Error('Cannot complete: ' + reasons.join('; '));
+  }
+
+  const now = new Date().toISOString();
+  await db.projects.update(projectId, { status: 'Completed', completedAt: now, lockedAt: now });
+  await logAudit('update', 'projects', projectId, { status: 'In Progress' }, { status: 'Completed' });
+}
+
+/* ─── NOTIFICATIONS ──────────────────────────────────────────── */
+async function createNotification(data) {
+  try {
+    await db.notifications.add({
+      ...data,
+      isRead:    false,
+      createdAt: new Date().toISOString()
+    });
+  } catch {
+    // non-critical
+  }
+}
+
+async function getUnreadNotifications(userId, deptId) {
+  const all = await db.notifications.where('isRead').equals(false).toArray();
+  return all.filter(n =>
+    (!n.userId || n.userId === userId) &&
+    (!n.deptId || n.deptId === deptId)
+  );
+}
+
+/* ─── QA FUNCTIONS ───────────────────────────────────────────── */
+async function submitQAReview(data) {
+  const user = window.KwezaAuth?.getCurrentUser?.();
+  const id = await db.qaReviews.add({
+    ...data,
+    reviewerId:   data.reviewerId   || user?.id || '',
+    reviewerDept: data.reviewerDept || user?.department || '',
+    createdAt:    new Date().toISOString()
+  });
+
+  // On fail — push project back to Revision
+  if (data.result === 'fail') {
+    await db.projects.update(data.projectId, { status: 'Revision' });
+    await createNotification({
+      deptId:  (await db.projects.get(data.projectId))?.departmentId,
+      type:    'warning',
+      title:   'QA Review Failed',
+      message: 'A QA review has failed. The project has been returned to Revision.',
+      refId:   data.projectId,
+      refType: 'project'
+    });
+  } else if (data.result === 'pass') {
+    const now = new Date().toISOString();
+    await db.projects.update(data.projectId, {
+      status:      'QA',
+      qaApprovedAt: now,
+      qaApprovedBy: data.reviewerId || user?.id || ''
+    });
+  }
+
+  await logAudit('create', 'qa_reviews', id, null, data);
+  return id;
+}
+
 async function seedCloudDefaults() {
   try {
     await Promise.all([
-      setSetting('company', (await getSetting('company')) || DEFAULT_SETTINGS.company),
-      setSetting('branding', (await getSetting('branding')) || DEFAULT_SETTINGS.branding),
-      setSetting('defaults', (await getSetting('defaults')) || DEFAULT_SETTINGS.defaults),
-      setSetting('clientNumberSeq', (await getSetting('clientNumberSeq')) || 1),
+      setSetting('company',          (await getSetting('company'))          || DEFAULT_SETTINGS.company),
+      setSetting('branding',         (await getSetting('branding'))         || DEFAULT_SETTINGS.branding),
+      setSetting('defaults',         (await getSetting('defaults'))         || DEFAULT_SETTINGS.defaults),
+      setSetting('clientNumberSeq',  (await getSetting('clientNumberSeq'))  || 1),
       setSetting('requestNumberSeq', (await getSetting('requestNumberSeq')) || 1),
-      setSetting('saleNumberSeq', (await getSetting('saleNumberSeq')) || 1),
-      setSetting('taskNumberSeq', (await getSetting('taskNumberSeq')) || 1),
-      setSetting('reportNumberSeq', (await getSetting('reportNumberSeq')) || 1)
+      setSetting('saleNumberSeq',    (await getSetting('saleNumberSeq'))    || 1),
+      setSetting('taskNumberSeq',    (await getSetting('taskNumberSeq'))    || 1),
+      setSetting('reportNumberSeq',  (await getSetting('reportNumberSeq'))  || 1),
+      setSetting('leadNumberSeq',    (await getSetting('leadNumberSeq'))    || 1),
+      setSetting('projectNumberSeq', (await getSetting('projectNumberSeq')) || 1)
     ]);
 
     for (const department of DEFAULT_MASTER_DEPARTMENTS) {
@@ -847,6 +1108,7 @@ window.KwezaDB = {
   incrementQuoteNumber,
   incrementInvoiceNumber,
   logActivity,
+  logAudit,
   getDashboardStats,
   getMonthlyRevenue,
   getClientWithStats,
@@ -870,6 +1132,17 @@ window.KwezaDB = {
   getWorkflowStats,
   getNextSequenceCode,
   slugifyId,
+  getDeptScoped,
+  // ─── NEW ───
+  createLead,
+  convertLeadToClient,
+  createProject,
+  getProjectWithDetails,
+  canCompleteProject,
+  completeProject,
+  submitQAReview,
+  createNotification,
+  getUnreadNotifications,
   DEFAULT_SETTINGS,
   DEFAULT_MASTER_DEPARTMENTS
 };

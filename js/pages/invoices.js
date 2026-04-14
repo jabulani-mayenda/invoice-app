@@ -30,10 +30,20 @@ function invoiceCurrencyFormatter(currency) {
 
 function invoiceStatusBadge(status) {
   return {
-    unpaid: 'badge-warning',
-    partial: 'badge-gold',
-    paid: 'badge-success'
+    unpaid:          'badge-warning',
+    partial:         'badge-gold',
+    paid:            'badge-success',
+    project_created: 'badge-muted'
   }[status] || 'badge-muted';
+}
+
+function invoiceStatusLabel(status) {
+  return {
+    unpaid:          'Unpaid',
+    partial:         'Partial',
+    paid:            'Paid',
+    project_created: '🚀 Project Created'
+  }[status] || status || 'unpaid';
 }
 
 async function renderInvoices(subpage = '') {
@@ -77,9 +87,9 @@ async function renderInvoices(subpage = '') {
     </div>
 
     <div class="tabs">
-      ${['all', 'unpaid', 'partial', 'paid'].map(status => `
+      ${['all', 'unpaid', 'partial', 'paid', 'project_created'].map(status => `
         <button class="tab-btn ${invoiceFilter === status ? 'active' : ''}" onclick="invoiceFilter='${status}';renderInvoices()">
-          ${status.charAt(0).toUpperCase() + status.slice(1)}
+          ${invoiceStatusLabel(status)}
           <span class="badge badge-muted" style="margin-left:4px;">
             ${status === 'all' ? invoices.length : invoices.filter(invoice => invoice.status === status).length}
           </span>
@@ -116,11 +126,13 @@ function invoiceCardHTML(invoice, client, sale, fmt) {
       </div>
       <div class="doc-card-right">
         <div class="doc-amount">${fmt(invoice.total)}</div>
-        <span class="badge ${invoiceStatusBadge(invoice.status)}">${invoice.status || 'unpaid'}</span>
+        <span class="badge ${invoiceStatusBadge(invoice.status)}">${invoiceStatusLabel(invoice.status)}</span>
       </div>
       <div class="action-row" onclick="event.stopPropagation()">
         <button class="btn btn-secondary btn-sm" onclick="navigate('invoices/${invoice.id}')">View</button>
-        ${invoice.status !== 'paid' ? `<button class="btn btn-success btn-sm" onclick="openPaymentModal(${invoice.id})">Pay</button>` : ''}
+        ${!['paid','project_created'].includes(invoice.status) ? `<button class="btn btn-success btn-sm" onclick="openPaymentModal(${invoice.id})">Pay</button>` : ''}
+        ${invoice.status === 'paid' && !invoice.projectId ? `<button class="btn btn-primary btn-sm" onclick="openCreateProjectModal(${invoice.id})" style="background:#2E7D32;">🚀 Create Project</button>` : ''}
+        ${invoice.projectId ? `<button class="btn btn-secondary btn-sm" onclick="navigate('projects/${invoice.projectId}')">🚀 View Project</button>` : ''}
         <button class="btn btn-ghost btn-icon" onclick="window.KwezaPDF.generatePDF('invoice', ${invoice.id})" title="Download">⬇</button>
         <button class="btn btn-ghost btn-icon" onclick="window.KwezaShare.shareViaWhatsApp('invoice', ${invoice.id})" title="WhatsApp">💬</button>
         <button class="btn btn-ghost btn-icon" onclick="deleteInvoice(${invoice.id})" title="Delete">🗑</button>
@@ -437,8 +449,8 @@ function addInvFromCatalog(id) {
 }
 
 async function saveInvoice(invoiceId = null) {
-  if (!window.KwezaAuth.hasRole('sales', 'finance')) {
-    showToast('Only Sales or Finance can create or edit invoices.', 'error');
+  if (!window.KwezaAuth.hasRole('sales', 'finance', 'sales-operations', 'administration')) {
+    showToast('Only Sales, Finance or Sales Operations can create invoices.', 'error');
     return;
   }
 
@@ -525,15 +537,17 @@ async function renderInvoiceDetail(invoiceId) {
     <div class="page-header">
       <div class="page-header-left">
         <h2>${invoice.number}</h2>
-        <p><span class="badge ${invoiceStatusBadge(invoice.status)}">${invoice.status || 'unpaid'}</span></p>
+        <p><span class="badge ${invoiceStatusBadge(invoice.status)}">${invoiceStatusLabel(invoice.status)}</span></p>
       </div>
-      <div class="flex gap-8">
+      <div class="flex gap-8" style="flex-wrap:wrap;">
         <button class="btn btn-secondary" onclick="renderInvoices()">← Back</button>
         <button class="btn btn-primary" onclick="navigate('invoices/${invoiceId}/edit')">Edit</button>
         <button class="btn btn-secondary" onclick="window.KwezaPDF.printDocument('invoice', ${invoiceId})">Print</button>
         <button class="btn btn-secondary" onclick="window.KwezaPDF.generatePDF('invoice', ${invoiceId})">Download PDF</button>
         <button class="btn btn-gold" onclick="window.KwezaShare.shareViaWhatsApp('invoice', ${invoiceId})">WhatsApp</button>
-        ${invoice.status !== 'paid' ? `<button class="btn btn-success" onclick="openPaymentModal(${invoiceId})">Record Payment</button>` : ''}
+        ${!['paid','project_created'].includes(invoice.status) ? `<button class="btn btn-success" onclick="openPaymentModal(${invoiceId})">Record Payment</button>` : ''}
+        ${invoice.status === 'paid' && !invoice.projectId ? `<button class="btn btn-primary" onclick="openCreateProjectModal(${invoiceId})" style="background:#2E7D32;">🚀 Create Project</button>` : ''}
+        ${invoice.projectId ? `<button class="btn btn-secondary" onclick="navigate('projects/${invoice.projectId}')">🚀 View Project</button>` : ''}
       </div>
     </div>
 
@@ -656,7 +670,7 @@ function openPaymentModal(invoiceId) {
 }
 
 async function submitPayment(invoiceId) {
-  if (!window.KwezaAuth.hasRole('finance')) {
+  if (!window.KwezaAuth.hasRole('finance', 'admin', 'administration')) {
     showToast('Only Finance can record payments.', 'error');
     return;
   }
@@ -667,6 +681,7 @@ async function submitPayment(invoiceId) {
     return;
   }
 
+  const user   = window.KwezaAuth.getCurrentUser();
   const status = await window.KwezaDB.recordPayment(
     invoiceId,
     amount,
@@ -674,8 +689,31 @@ async function submitPayment(invoiceId) {
     document.getElementById('pay-notes')?.value
   );
 
+  // Update payment with who recorded it
+  try {
+    const allPayments = await window.KwezaDB.db.payments.where('invoiceId').equals(invoiceId).toArray();
+    const latest = allPayments[allPayments.length - 1];
+    if (latest) await window.KwezaDB.db.payments.update(latest.id, { recordedBy: user?.id || '' });
+  } catch { /* non-critical */ }
+
   showToast(`Payment recorded! Status: ${status}.`, 'success');
   closeModal();
+
+  // Auto-prompt project creation when fully paid
+  if (status === 'paid') {
+    const invoice = await window.KwezaDB.db.invoices.get(invoiceId);
+    if (invoice && !invoice.projectId) {
+      setTimeout(() => {
+        if (confirm(`Invoice ${invoice.number} is fully paid! 🎉\n\nCreate a Project now to start execution?`)) {
+          window.KwezaPages.openCreateProjectModal(invoiceId);
+        } else {
+          renderInvoiceDetail(invoiceId);
+        }
+      }, 400);
+      return;
+    }
+  }
+
   await renderInvoiceDetail(invoiceId);
 }
 
@@ -704,5 +742,6 @@ Object.assign(window.KwezaPages, {
   submitPayment,
   deleteInvoice,
   setInvoiceStep,
-  syncInvoiceClientFromSale
+  syncInvoiceClientFromSale,
+  invoiceStatusLabel
 });
