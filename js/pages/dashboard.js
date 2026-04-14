@@ -182,7 +182,7 @@ async function renderDeliveryDashboard(user, deptId, fmt) {
     db.projects.toArray(),
     db.projectTasks.toArray(),
     db.departmentReports.toArray(),
-    db.notifications.where('isRead').equals(false).toArray()
+    db.notifications.toArray()
   ]);
 
   // Dept scope
@@ -192,11 +192,14 @@ async function renderDeliveryDashboard(user, deptId, fmt) {
     reports       = reports.filter(r => r.departmentId  === deptId);
     notifications = notifications.filter(n => !n.deptId || n.deptId === deptId);
   }
+  // Filter unread in JS (boolean not a valid IDB key)
+  notifications = notifications.filter(n => !n.isRead);
 
   const activeProjects = projects.filter(p => ['Active','In Progress','Pending'].includes(p.status)).length;
   const myTasks        = tasks.filter(t  => ['Pending','In Progress','Blocked','Testing'].includes(t.status)).length;
   const doneTasks      = tasks.filter(t  => t.status === 'Done').length;
   const unread         = notifications.length;
+
 
   document.getElementById('dashboard-page').innerHTML = `
     <div style="margin-bottom:24px;padding:20px 24px;background:linear-gradient(135deg,rgba(21,101,192,0.3),rgba(25,118,210,0.1));border:1px solid rgba(25,118,210,0.25);border-radius:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">

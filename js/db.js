@@ -44,20 +44,26 @@ rawDb.version(7).stores({
   users:              'id, name, department, role, passwordHash, isActive',
   departments:        'id, name, code, createdAt',
   employees:          '++id, fullName, departmentId, position, email, phone, status, createdAt',
-  // ─── NEW TABLES ───
   leads:              '++id, leadCode, name, company, phone, email, source, status, assignedDeptId, clientId, departmentId, createdAt',
   projects:           '++id, projectCode, invoiceId, clientId, saleId, name, status, departmentId, startDate, dueDate, createdAt',
   projectTasks:       '++id, taskCode, projectId, departmentId, assignedTo, task, status, dueDate, createdAt',
   projectMilestones:  '++id, projectId, title, status, dueDate, createdAt',
   departmentReports:  '++id, reportCode, departmentId, projectId, saleId, type, status, date, submittedBy',
   qaReviews:          '++id, projectId, reviewerId, reviewerDept, result, createdAt',
-  notifications:      '++id, userId, deptId, type, isRead, createdAt, refId, refType',
+  notifications:      '++id, userId, deptId, type, isRead, createdAt, refId, refType',  // isRead indexed in v7
   auditLogs:          '++id, userId, action, tableName, recordId, createdAt',
   sessionTokens:      '++id, userId, token, expiresAt, createdAt'
-}).upgrade(tx => {
-  // No destructive changes — all new columns are nullable
-  return tx.table('settings').toCollection().count();
 });
+
+// v8 — fix: remove isRead from notifications index (boolean is not a valid IDBKeyRange key)
+//           filtering by isRead is now done in JS after .toArray()
+rawDb.version(8).stores({
+  notifications: '++id, userId, deptId, type, createdAt, refId, refType'
+}).upgrade(tx => {
+  // No destructive changes — isRead field stays on the records, just no longer indexed
+  return Promise.resolve();
+});
+
 
 const TABLE_CONFIG = {
   clients:           { pk: 'id',  remote: 'clients' },
@@ -235,8 +241,13 @@ async function replaceLocalTable(tableName, rows) {
 }
 
 async function syncTableFromRemote(tableName) {
-  const rows = await remoteRequest(tableName, { method: 'GET' });
-  await replaceLocalTable(tableName, rows || []);
+  try {
+    const rows = await remoteRequest(tableName, { method: 'GET' });
+    await replaceLocalTable(tableName, rows || []);
+  } catch (err) {
+    // Table may not exist in remote yet (e.g. schema not deployed) — don't crash full sync
+    console.warn(`[Kweza] Skipping remote sync for "${tableName}": ${err.message}`);
+  }
 }
 
 async function refreshFromRemote(options = {}) {
@@ -871,11 +882,14 @@ async function seedLocalDefaults() {
  * @param {string} [deptField='departmentId'] — field to filter on
  */
 async function getDeptScoped(tableName, deptField = 'departmentId') {
-  const table  = db[tableName];
-  const user   = window.KwezaAuth?.getCurrentUser?.();
+  const table   = db[tableName];
+  const user    = window.KwezaAuth?.getCurrentUser?.();
   const isAdmin = user?.role === 'admin';
-  if (isAdmin || !user) return table.toArray();
-  return table.where(deptField).equals(user.id).toArray();
+  if (isAdmin || !user || !user.id) return table.toArray();
+  // Guard: .where().equals() requires a defined non-boolean primitive
+  const deptId = user.id;
+  if (deptId === undefined || deptId === null) return table.toArray();
+  return table.where(deptField).equals(String(deptId)).toArray();
 }
 
 /* ─── AUDIT LOGGING ──────────────────────────────────────────── */
@@ -1033,8 +1047,11 @@ async function createNotification(data) {
 }
 
 async function getUnreadNotifications(userId, deptId) {
-  const all = await db.notifications.where('isRead').equals(false).toArray();
+  // NOTE: Boolean values are not valid IDBKeyRange keys, so we must
+  // fetch all notifications and filter in JS — never use .where('isRead').equals(false)
+  const all = await db.notifications.toArray();
   return all.filter(n =>
+    !n.isRead &&
     (!n.userId || n.userId === userId) &&
     (!n.deptId || n.deptId === deptId)
   );
