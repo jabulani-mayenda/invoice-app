@@ -55,7 +55,8 @@ const ROUTES = {
   settings:    ()    => window.KwezaPages.renderSettings(),
   leads:       ()    => window.KwezaPages.renderLeads(),
   projects:    sub   => window.KwezaPages.renderProjects(sub),
-  qa:          ()    => window.KwezaPages.renderQA()
+  qa:          ()    => window.KwezaPages.renderQA(),
+  loans:       ()    => window.KwezaPages.renderLoans()
 };
 
 const PAGE_IDS = {
@@ -72,7 +73,8 @@ const PAGE_IDS = {
   settings:     'settings-page',
   leads:        'leads-page',
   projects:     'projects-page',
-  qa:           'qa-page'
+  qa:           'qa-page',
+  loans:        'loans-page'
 };
 
 const PAGE_TITLES = {
@@ -89,7 +91,8 @@ const PAGE_TITLES = {
   settings:    { title: 'Settings',         sub: 'Configure your app' },
   leads:       { title: 'Leads',            sub: 'CRM — track prospects and convert to clients' },
   projects:    { title: 'Projects',         sub: 'Execution workspace — tasks, milestones and delivery' },
-  qa:          { title: 'QA Reviews',       sub: 'Quality assurance — approve or reject project delivery' }
+  qa:          { title: 'QA Reviews',       sub: 'Quality assurance — approve or reject project delivery' },
+  loans:       { title: 'Loan Tracker',     sub: 'Track money lent to clients and record repayments' }
 };
 
 /* ─── ROUTE HELPERS ──────────────────────────────────────────── */
@@ -232,7 +235,8 @@ function applyNavPermissions(user) {
     reports:      'reports',
     settings:     'settings',
     projects:     'projects',
-    qa:           'qa'
+    qa:           'qa',
+    loans:        'loans'
   };
 
   const isAdmin = user?.role === 'admin';

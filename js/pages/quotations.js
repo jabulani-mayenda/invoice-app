@@ -46,12 +46,12 @@ async function renderQuotations(subpage = '') {
   }
 
   if (subpage && subpage.endsWith('/edit')) {
-    await renderQuoteBuilder(parseInt(subpage.split('/')[0], 10));
+    await renderQuoteBuilder(subpage.split('/')[0]);
     return;
   }
 
-  if (subpage && !Number.isNaN(parseInt(subpage, 10))) {
-    await renderQuoteDetail(parseInt(subpage, 10));
+  if (subpage && subpage !== 'new') {
+    await renderQuoteDetail(subpage);
     return;
   }
 
@@ -119,10 +119,10 @@ function quoteCardHTML(quote, client, sale, fmt) {
       </div>
       <div class="action-row" onclick="event.stopPropagation()">
         <button class="btn btn-secondary btn-sm" onclick="navigate('quotations/${quote.id}')">View</button>
-        ${quote.status !== 'converted' ? `<button class="btn btn-success btn-sm" onclick="convertQuote(${quote.id})">→ Invoice</button>` : ''}
-        <button class="btn btn-ghost btn-icon" onclick="window.KwezaPDF.generatePDF('quotation', ${quote.id})" title="Download">⬇</button>
-        <button class="btn btn-ghost btn-icon" onclick="window.KwezaShare.shareViaWhatsApp('quotation', ${quote.id})" title="WhatsApp">💬</button>
-        <button class="btn btn-ghost btn-icon" onclick="deleteQuote(${quote.id})" title="Delete">🗑</button>
+        ${quote.status !== 'converted' ? `<button class="btn btn-success btn-sm" onclick="convertQuote('${quote.id}')">→ Invoice</button>` : ''}
+        <button class="btn btn-ghost btn-icon" onclick="window.KwezaPDF.generatePDF('quotation', '${quote.id}')" title="Download">⬇</button>
+        <button class="btn btn-ghost btn-icon" onclick="window.KwezaShare.shareViaWhatsApp('quotation', '${quote.id}')" title="WhatsApp">💬</button>
+        <button class="btn btn-ghost btn-icon" onclick="deleteQuote('${quote.id}')" title="Delete">🗑</button>
       </div>
     </div>`;
 }
@@ -161,7 +161,7 @@ async function renderQuoteBuilder(quoteId = null) {
       </div>
       <div class="flex gap-8 builder-top-actions">
         <button class="btn btn-secondary" onclick="renderQuotations()">← Back</button>
-        <button class="btn btn-success" onclick="saveQuotation(${quoteId})">Save Quotation</button>
+        <button class="btn btn-success" onclick="saveQuotation('${quoteId || ''}')">Save Quotation</button>
       </div>
     </div>
 
@@ -292,7 +292,7 @@ async function renderQuoteBuilder(quoteId = null) {
       </div>
       <div class="wizard-actions">
         <button class="btn btn-secondary" onclick="window.KwezaPages.setQuoteStep(2)">← Back</button>
-        <button class="btn btn-success" onclick="saveQuotation(${quoteId})">Save Quotation</button>
+        <button class="btn btn-success" onclick="saveQuotation('${quoteId || ''}')">Save Quotation</button>
       </div>
     </div>
   `;
@@ -403,7 +403,7 @@ function openCatalogPicker() {
           ${items.length === 0
             ? `<div class="empty-state"><div class="empty-state-icon">📦</div><h3>Catalog is empty</h3><p>Add items in the Catalog section first.</p></div>`
             : items.map(item => `
-              <div class="catalog-card" style="margin-bottom:8px;" onclick="addFromCatalog(${item.id});closeModal()">
+              <div class="catalog-card" style="margin-bottom:8px;" onclick="addFromCatalog('${item.id}');closeModal()">
                 <div class="catalog-icon">📦</div>
                 <div style="flex:1;">
                   <div class="catalog-name">${item.name}</div>
@@ -442,7 +442,7 @@ async function saveQuotation(quoteId = null) {
     return;
   }
 
-  const clientId = parseInt(document.getElementById('q-client')?.value, 10);
+  const clientId = document.getElementById('q-client')?.value;
   if (!clientId) {
     showToast('Please select a client', 'error');
     return;
@@ -463,7 +463,7 @@ async function saveQuotation(quoteId = null) {
   const user = window.KwezaAuth?.getCurrentUser?.() || {};
   const data = {
     clientId,
-    saleId: parseInt(document.getElementById('q-sale')?.value, 10) || null,
+    saleId: document.getElementById('q-sale')?.value || null,
     number: document.getElementById('q-number')?.value || '',
     date: document.getElementById('q-date')?.value || new Date().toISOString().split('T')[0],
     validityDays: parseInt(document.getElementById('q-validity')?.value, 10) || 14,
@@ -558,10 +558,10 @@ async function renderQuoteDetail(quoteId) {
       <div class="flex gap-8 builder-top-actions">
         <button class="btn btn-secondary" onclick="renderQuotations()">← Back</button>
         <button class="btn btn-primary" onclick="navigate('quotations/${quoteId}/edit')">Edit</button>
-        <button class="btn btn-secondary" onclick="window.KwezaPDF.printDocument('quotation', ${quoteId})">Print</button>
-        <button class="btn btn-secondary" onclick="window.KwezaPDF.generatePDF('quotation', ${quoteId})">Download PDF</button>
-        <button class="btn btn-gold" onclick="window.KwezaShare.shareViaWhatsApp('quotation', ${quoteId})">WhatsApp</button>
-        ${quote.status !== 'converted' ? `<button class="btn btn-success" onclick="convertQuote(${quoteId})">Convert to Invoice</button>` : ''}
+        <button class="btn btn-secondary" onclick="window.KwezaPDF.printDocument('quotation', '${quoteId}')">Print</button>
+        <button class="btn btn-secondary" onclick="window.KwezaPDF.generatePDF('quotation', '${quoteId}')">Download PDF</button>
+        <button class="btn btn-gold" onclick="window.KwezaShare.shareViaWhatsApp('quotation', '${quoteId}')">WhatsApp</button>
+        ${quote.status !== 'converted' ? `<button class="btn btn-success" onclick="convertQuote('${quoteId}')">Convert to Invoice</button>` : ''}
       </div>
     </div>
 

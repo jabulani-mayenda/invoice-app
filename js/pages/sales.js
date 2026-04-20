@@ -103,7 +103,7 @@ async function openSaleModal(saleId = null) {
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="saveSale(${saleId || 'null'})">Save Sale</button>
+        <button class="btn btn-primary" onclick="saveSale('${saleId || ''}')">Save Sale</button>
       </div>
     </div>
   `;
@@ -116,7 +116,7 @@ async function saveSale(saleId = null) {
     return;
   }
 
-  const clientId = parseInt(document.getElementById('sl-client').value, 10);
+  const clientId = document.getElementById('sl-client').value;
   const service = document.getElementById('sl-service').value.trim();
   if (!clientId || !service) {
     showToast('Client and service are required.', 'error');
@@ -124,7 +124,7 @@ async function saveSale(saleId = null) {
   }
 
   const payload = {
-    requestId: parseInt(document.getElementById('sl-request').value, 10) || null,
+    requestId: document.getElementById('sl-request').value || null,
     clientId,
     service,
     total: parseFloat(document.getElementById('sl-total').value) || 0,

@@ -27,8 +27,8 @@ const PRIORITY_COLORS = {
 
 /* ─── MAIN LIST VIEW ─────────────────────────────────────────── */
 async function renderProjects(subpage) {
-  if (subpage && subpage.match(/^\d+$/)) {
-    return renderProjectDetail(parseInt(subpage, 10));
+  if (subpage && subpage !== 'new') {
+    return renderProjectDetail(subpage);
   }
 
   const { db } = window.KwezaDB;
@@ -181,9 +181,9 @@ async function renderProjectDetail(projectId) {
       </div>
       <div style="display:flex;gap:8px;">
         ${window.KwezaAuth.hasRole('admin','finance','sales-operations','administration')
-          ? `<button class="btn btn-secondary" onclick="openEditProjectModal(${projectId})">Edit Project</button>` : ''}
+          ? `<button class="btn btn-secondary" onclick="openEditProjectModal('${projectId}')">Edit Project</button>` : ''}
         ${check.canComplete && !['Completed','Closed'].includes(details.status)
-          ? `<button class="btn btn-primary" onclick="markProjectComplete(${projectId})" style="background:#2E7D32;">✓ Complete Project</button>` : ''}
+          ? `<button class="btn btn-primary" onclick="markProjectComplete('${projectId}')" style="background:#2E7D32;">✓ Complete Project</button>` : ''}
       </div>
     </div>
 
@@ -226,7 +226,7 @@ async function renderProjectDetail(projectId) {
     <div id="panel-tasks">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
         <h3 style="font-size:15px;font-weight:600;">Tasks</h3>
-        <button class="btn btn-primary btn-sm" onclick="openTaskModal(${projectId})">+ Add Task</button>
+        <button class="btn btn-primary btn-sm" onclick="openTaskModal('${projectId}')">+ Add Task</button>
       </div>
       ${details.tasks.length === 0
         ? `<div class="empty-state" style="padding:40px 20px;"><div class="empty-state-icon">📋</div><p>No tasks yet</p></div>`
@@ -237,7 +237,7 @@ async function renderProjectDetail(projectId) {
     <div id="panel-milestones" style="display:none;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
         <h3 style="font-size:15px;font-weight:600;">Milestones</h3>
-        <button class="btn btn-primary btn-sm" onclick="openMilestoneModal(${projectId})">+ Add Milestone</button>
+        <button class="btn btn-primary btn-sm" onclick="openMilestoneModal('${projectId}')">+ Add Milestone</button>
       </div>
       ${details.milestones.length === 0
         ? `<div class="empty-state" style="padding:40px 20px;"><div class="empty-state-icon">🏁</div><p>No milestones yet</p></div>`
@@ -248,7 +248,7 @@ async function renderProjectDetail(projectId) {
     <div id="panel-reports" style="display:none;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
         <h3 style="font-size:15px;font-weight:600;">Department Reports</h3>
-        <button class="btn btn-primary btn-sm" onclick="openReportModal(${projectId})">+ Submit Report</button>
+        <button class="btn btn-primary btn-sm" onclick="openReportModal('${projectId}')">+ Submit Report</button>
       </div>
       ${details.reports.length === 0
         ? `<div class="empty-state" style="padding:40px 20px;"><div class="empty-state-icon">📑</div><p>No reports submitted yet</p></div>`
@@ -260,7 +260,7 @@ async function renderProjectDetail(projectId) {
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
         <h3 style="font-size:15px;font-weight:600;">QA Reviews</h3>
         ${window.KwezaAuth.hasRole('admin','administration','qa')
-          ? `<button class="btn btn-primary btn-sm" onclick="openQAReviewModal(${projectId})">+ Submit QA Review</button>` : ''}
+          ? `<button class="btn btn-primary btn-sm" onclick="openQAReviewModal('${projectId}')">+ Submit QA Review</button>` : ''}
       </div>
       ${details.qaReviews.length === 0
         ? `<div class="empty-state" style="padding:40px 20px;"><div class="empty-state-icon">✅</div><p>No QA reviews yet</p></div>`
@@ -292,7 +292,7 @@ function taskCardHTML(task, deptMap) {
       </div>
       <div class="doc-card-right">
         <span class="badge" style="background:${color}20;color:${color};border:1px solid ${color}40;">${task.status}</span>
-        <button class="btn btn-secondary btn-sm" onclick="openTaskModal(${task.projectId}, ${task.id})">Edit</button>
+        <button class="btn btn-secondary btn-sm" onclick="openTaskModal('${task.projectId}', '${task.id}')">Edit</button>
       </div>
     </div>`;
 }
@@ -309,7 +309,7 @@ function milestoneCardHTML(ms) {
       </div>
       <div class="doc-card-right">
         <span class="badge" style="background:${done ? '#E8F5E9' : '#ECEFF1'};color:${done ? '#2E7D32' : '#607D8B'};">${ms.status}</span>
-        <button class="btn btn-secondary btn-sm" onclick="openMilestoneModal(${ms.projectId}, ${ms.id})">Edit</button>
+        <button class="btn btn-secondary btn-sm" onclick="openMilestoneModal('${ms.projectId}', '${ms.id}')">Edit</button>
       </div>
     </div>`;
 }
@@ -403,9 +403,9 @@ async function openTaskModal(projectId, taskId = null) {
         </div>
       </div>
       <div class="modal-footer">
-        ${task ? `<button class="btn btn-danger" onclick="deleteTask(${taskId}, ${projectId})">Delete</button>` : ''}
+        ${task ? `<button class="btn btn-danger" onclick="deleteTask('${taskId}', '${projectId}')">Delete</button>` : ''}
         <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="saveTask(${taskId || 'null'}, ${projectId})">Save Task</button>
+        <button class="btn btn-primary" onclick="saveTask('${taskId || ''}', '${projectId}')">Save Task</button>
       </div>
     </div>
   `;
@@ -500,7 +500,7 @@ async function openMilestoneModal(projectId, msId = null) {
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="saveMilestone(${msId || 'null'}, ${projectId})">Save Milestone</button>
+        <button class="btn btn-primary" onclick="saveMilestone('${msId || ''}', '${projectId}')">Save Milestone</button>
       </div>
     </div>
   `;
@@ -638,7 +638,7 @@ async function openQAReviewModal(projectId) {
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="submitQAFromProject(${projectId})">Submit Review</button>
+        <button class="btn btn-primary" onclick="submitQAFromProject('${projectId}')">Submit Review</button>
       </div>
     </div>
   `;
@@ -728,7 +728,7 @@ async function openCreateProjectModal(invoiceId = null) {
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="saveNewProject(${invoiceId || 'null'})">Create Project</button>
+        <button class="btn btn-primary" onclick="saveNewProject('${invoiceId || ''}')">Create Project</button>
       </div>
     </div>
   `;
@@ -745,7 +745,7 @@ async function saveNewProject(invoiceId = null) {
   const dueVal = document.getElementById('proj-due')?.value;
   const project = await window.KwezaDB.createProject({
     name,
-    clientId:     parseInt(document.getElementById('proj-client')?.value, 10) || null,
+    clientId:     document.getElementById('proj-client')?.value || null,
     departmentId: deptId,
     invoiceId:    invoiceId || null,
     priority:     document.getElementById('proj-priority')?.value || 'Normal',

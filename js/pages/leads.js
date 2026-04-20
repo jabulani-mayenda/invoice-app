@@ -95,9 +95,9 @@ function leadCardHTML(lead) {
       <div class="doc-card-right">
         <span class="badge" style="background:${color}20;color:${color};border:1px solid ${color}40;">${lead.status}</span>
         <div style="display:flex;gap:6px;">
-          <button class="btn btn-secondary btn-sm" onclick="openLeadModal(${lead.id})">Edit</button>
+          <button class="btn btn-secondary btn-sm" onclick="openLeadModal('${lead.id}')">Edit</button>
           ${lead.status !== 'Converted' && lead.status !== 'Lost'
-            ? `<button class="btn btn-primary btn-sm" onclick="openConvertLeadModal(${lead.id})">Convert</button>`
+            ? `<button class="btn btn-primary btn-sm" onclick="openConvertLeadModal('${lead.id}')">Convert</button>`
             : ''}
         </div>
       </div>
@@ -197,9 +197,9 @@ async function openLeadModal(leadId = null) {
         </div>` : ''}
       </div>
       <div class="modal-footer">
-        ${lead ? `<button class="btn btn-danger" onclick="deleteLead(${lead.id})">Delete</button>` : ''}
+        ${lead ? `<button class="btn btn-danger" onclick="deleteLead('${lead.id}')">Delete</button>` : ''}
         <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="saveLead(${leadId || 'null'})">Save Lead</button>
+        <button class="btn btn-primary" onclick="saveLead('${leadId || ''}')">Save Lead</button>
       </div>
     </div>
   `;
@@ -297,7 +297,7 @@ async function openConvertLeadModal(leadId) {
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="confirmConvertLead(${leadId})">✓ Convert to Client</button>
+        <button class="btn btn-primary" onclick="confirmConvertLead('${leadId}')">✓ Convert to Client</button>
       </div>
     </div>
   `;

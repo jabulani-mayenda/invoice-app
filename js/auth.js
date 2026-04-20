@@ -110,42 +110,54 @@ function getDeptFilter() {
 
 /* ─── USER SEEDING ───────────────────────────────────────────── */
 async function seedDefaultUsers() {
-  const { db } = window.KwezaDB;
+  const { db, rawDb } = window.KwezaDB;
   for (const department of DEFAULT_DEPARTMENTS) {
-    const existing = await db.users.get(department.id);
+    // Read from local IndexedDB ONLY — avoid hitting Supabase here, which would
+    // trigger a pull that could overwrite freshly-seeded local users before they
+    // are flushed to the cloud.
+    const existing = await rawDb.table('users').get(department.id);
     if (!existing) {
       const passwordHash = await hashPassword(department.password);
-      await db.users.put({ ...department, passwordHash });
+      const record = { ...department, passwordHash };
+      // Save to local cache immediately
+      await rawDb.table('users').put(record);
+      // Then push to Supabase (non-blocking — will be picked up by next sync cycle)
+      db.users.put(record).catch(err => console.warn('[Kweza] seedDefaultUsers cloud push failed:', err.message));
     } else if (!existing.passwordHash) {
-      // Backfill hash for existing users
+      // Backfill hash for existing users that only have plaintext password
       const passwordHash = await hashPassword(existing.password || department.password);
-      await db.users.update(existing.id, { passwordHash });
+      await rawDb.table('users').update(existing.id, { passwordHash });
+      db.users.update(existing.id, { passwordHash }).catch(() => {});
     }
   }
 }
 
 async function getLoginAccounts() {
-  const { db, refreshFromRemote } = window.KwezaDB;
-  try {
-    await refreshFromRemote({ force: true, tables: ['users'] });
-  } catch {
-    // offline — use local
-  }
+  const { db } = window.KwezaDB;
+  // NOTE: We intentionally do NOT call refreshFromRemote here.
+  // seedDefaultUsers() (called just before this) already flushed users to Supabase.
+  // Calling refreshFromRemote at this point risks wiping local users if Supabase
+  // hasn't received them yet (race condition on first run).
+  // The background cloudSyncTimer handles keeping users in sync after login.
   const accounts = await db.users.orderBy('department').toArray();
   return accounts.length ? accounts : DEFAULT_DEPARTMENTS;
 }
 
 /* ─── LOGIN FLOW ─────────────────────────────────────────────── */
 async function attemptLogin(deptId, password) {
-  const { db, refreshFromRemote } = window.KwezaDB;
+  const { rawDb } = window.KwezaDB;
 
-  try {
-    await refreshFromRemote({ force: true, tables: ['users'] });
-  } catch {
-    // offline — fall through to local check
+  // Read user from local IndexedDB directly — avoids triggering a Supabase
+  // pull that could wipe local users if the cloud table is empty.
+  let user = await rawDb.table('users').get(deptId);
+
+  // If not found locally, fall back to the DEFAULT_DEPARTMENTS hardcoded list
+  // (handles fresh installs where Supabase hasn't been seeded yet)
+  if (!user) {
+    const fallback = DEFAULT_DEPARTMENTS.find(d => d.id === deptId);
+    if (fallback) user = fallback;
   }
 
-  const user = await db.users.get(deptId);
   if (!user) return { ok: false, error: 'Department not found.' };
   if (user.isActive === false) return { ok: false, error: 'This account has been deactivated.' };
 

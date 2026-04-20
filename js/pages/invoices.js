@@ -53,12 +53,12 @@ async function renderInvoices(subpage = '') {
   }
 
   if (subpage && subpage.endsWith('/edit')) {
-    await renderInvoiceBuilder(parseInt(subpage.split('/')[0], 10));
+    await renderInvoiceBuilder(subpage.split('/')[0]);
     return;
   }
 
-  if (subpage && !Number.isNaN(parseInt(subpage, 10))) {
-    await renderInvoiceDetail(parseInt(subpage, 10));
+  if (subpage && subpage !== 'new') {
+    await renderInvoiceDetail(subpage);
     return;
   }
 
@@ -130,12 +130,12 @@ function invoiceCardHTML(invoice, client, sale, fmt) {
       </div>
       <div class="action-row" onclick="event.stopPropagation()">
         <button class="btn btn-secondary btn-sm" onclick="navigate('invoices/${invoice.id}')">View</button>
-        ${!['paid','project_created'].includes(invoice.status) ? `<button class="btn btn-success btn-sm" onclick="openPaymentModal(${invoice.id})">Pay</button>` : ''}
-        ${invoice.status === 'paid' && !invoice.projectId ? `<button class="btn btn-primary btn-sm" onclick="openCreateProjectModal(${invoice.id})" style="background:#2E7D32;">🚀 Create Project</button>` : ''}
+        ${!['paid','project_created'].includes(invoice.status) ? `<button class="btn btn-success btn-sm" onclick="openPaymentModal('${invoice.id}')">Pay</button>` : ''}
+        ${invoice.status === 'paid' && !invoice.projectId ? `<button class="btn btn-primary btn-sm" onclick="openCreateProjectModal('${invoice.id}')" style="background:#2E7D32;">🚀 Create Project</button>` : ''}
         ${invoice.projectId ? `<button class="btn btn-secondary btn-sm" onclick="navigate('projects/${invoice.projectId}')">🚀 View Project</button>` : ''}
-        <button class="btn btn-ghost btn-icon" onclick="window.KwezaPDF.generatePDF('invoice', ${invoice.id})" title="Download">⬇</button>
-        <button class="btn btn-ghost btn-icon" onclick="window.KwezaShare.shareViaWhatsApp('invoice', ${invoice.id})" title="WhatsApp">💬</button>
-        <button class="btn btn-ghost btn-icon" onclick="deleteInvoice(${invoice.id})" title="Delete">🗑</button>
+        <button class="btn btn-ghost btn-icon" onclick="window.KwezaPDF.generatePDF('invoice', '${invoice.id}')" title="Download">⬇</button>
+        <button class="btn btn-ghost btn-icon" onclick="window.KwezaShare.shareViaWhatsApp('invoice', '${invoice.id}')" title="WhatsApp">💬</button>
+        <button class="btn btn-ghost btn-icon" onclick="deleteInvoice('${invoice.id}')" title="Delete">🗑</button>
       </div>
     </div>`;
 }
@@ -178,7 +178,7 @@ async function renderInvoiceBuilder(invoiceId = null) {
       </div>
       <div class="flex gap-8 builder-top-actions">
         <button class="btn btn-secondary" onclick="renderInvoices()">← Back</button>
-        <button class="btn btn-success" onclick="saveInvoice(${invoiceId})">Save Invoice</button>
+        <button class="btn btn-success" onclick="saveInvoice('${invoiceId || ''}')">Save Invoice</button>
       </div>
     </div>
 
@@ -309,7 +309,7 @@ async function renderInvoiceBuilder(invoiceId = null) {
       </div>
       <div class="wizard-actions">
         <button class="btn btn-secondary" onclick="window.KwezaPages.setInvoiceStep(2)">← Back</button>
-        <button class="btn btn-success" onclick="saveInvoice(${invoiceId})">Save Invoice</button>
+        <button class="btn btn-success" onclick="saveInvoice('${invoiceId || ''}')">Save Invoice</button>
       </div>
     </div>
   `;
@@ -415,7 +415,7 @@ function openInvCatalogPicker() {
           ${items.length === 0
             ? `<div class="empty-state"><div class="empty-state-icon">📦</div><h3>Catalog is empty</h3><p>Add items in the Catalog section first.</p></div>`
             : items.map(item => `
-              <div class="catalog-card" style="margin-bottom:8px;" onclick="addInvFromCatalog(${item.id});closeModal()">
+              <div class="catalog-card" style="margin-bottom:8px;" onclick="addInvFromCatalog('${item.id}');closeModal()">
                 <div class="catalog-icon">📦</div>
                 <div style="flex:1">
                   <div class="catalog-name">${item.name}</div>
@@ -454,7 +454,7 @@ async function saveInvoice(invoiceId = null) {
     return;
   }
 
-  const clientId = parseInt(document.getElementById('inv-client')?.value, 10);
+  const clientId = document.getElementById('inv-client')?.value;
   if (!clientId) {
     showToast('Select a client', 'error');
     return;
@@ -475,7 +475,7 @@ async function saveInvoice(invoiceId = null) {
   const user = window.KwezaAuth?.getCurrentUser?.() || {};
   const data = {
     clientId,
-    saleId: parseInt(document.getElementById('inv-sale')?.value, 10) || null,
+    saleId: document.getElementById('inv-sale')?.value || null,
     number: document.getElementById('inv-number')?.value || '',
     date: document.getElementById('inv-date')?.value || new Date().toISOString().split('T')[0],
     dueDate: document.getElementById('inv-due')?.value || null,
@@ -542,11 +542,11 @@ async function renderInvoiceDetail(invoiceId) {
       <div class="flex gap-8" style="flex-wrap:wrap;">
         <button class="btn btn-secondary" onclick="renderInvoices()">← Back</button>
         <button class="btn btn-primary" onclick="navigate('invoices/${invoiceId}/edit')">Edit</button>
-        <button class="btn btn-secondary" onclick="window.KwezaPDF.printDocument('invoice', ${invoiceId})">Print</button>
-        <button class="btn btn-secondary" onclick="window.KwezaPDF.generatePDF('invoice', ${invoiceId})">Download PDF</button>
-        <button class="btn btn-gold" onclick="window.KwezaShare.shareViaWhatsApp('invoice', ${invoiceId})">WhatsApp</button>
-        ${!['paid','project_created'].includes(invoice.status) ? `<button class="btn btn-success" onclick="openPaymentModal(${invoiceId})">Record Payment</button>` : ''}
-        ${invoice.status === 'paid' && !invoice.projectId ? `<button class="btn btn-primary" onclick="openCreateProjectModal(${invoiceId})" style="background:#2E7D32;">🚀 Create Project</button>` : ''}
+        <button class="btn btn-secondary" onclick="window.KwezaPDF.printDocument('invoice', '${invoiceId}')">Print</button>
+        <button class="btn btn-secondary" onclick="window.KwezaPDF.generatePDF('invoice', '${invoiceId}')">Download PDF</button>
+        <button class="btn btn-gold" onclick="window.KwezaShare.shareViaWhatsApp('invoice', '${invoiceId}')">WhatsApp</button>
+        ${!['paid','project_created'].includes(invoice.status) ? `<button class="btn btn-success" onclick="openPaymentModal('${invoiceId}')">Record Payment</button>` : ''}
+        ${invoice.status === 'paid' && !invoice.projectId ? `<button class="btn btn-primary" onclick="openCreateProjectModal('${invoiceId}')" style="background:#2E7D32;">🚀 Create Project</button>` : ''}
         ${invoice.projectId ? `<button class="btn btn-secondary" onclick="navigate('projects/${invoice.projectId}')">🚀 View Project</button>` : ''}
       </div>
     </div>
@@ -662,7 +662,7 @@ function openPaymentModal(invoiceId) {
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-        <button class="btn btn-success" onclick="submitPayment(${invoiceId})">Record</button>
+        <button class="btn btn-success" onclick="submitPayment('${invoiceId}')">Record</button>
       </div>
     </div>`;
 

@@ -95,7 +95,7 @@ async function openRequestModal(requestId = null) {
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="saveRequest(${requestId || 'null'})">Save Request</button>
+        <button class="btn btn-primary" onclick="saveRequest('${requestId || ''}')">Save Request</button>
       </div>
     </div>
   `;

@@ -57,8 +57,8 @@ function loanCardHTML(loan, client, fmt) {
           <span class="badge ${badge}">${loan.status||'active'}</span>
           <span style="font-size:var(--text-xs);color:var(--text-muted);">${pct}% paid</span>
           <div class="flex gap-8 mt-8" style="margin-top:8px;">
-            ${loan.status!=='paid'?`<button class="btn btn-success btn-sm" onclick="openInstallmentModal(${loan.id})">💰 Pay</button>`:''}
-            <button class="btn btn-ghost btn-sm" onclick="deleteLoan(${loan.id})">🗑</button>
+            ${loan.status!=='paid'?`<button class="btn btn-success btn-sm" onclick="openInstallmentModal('${loan.id}')">💰 Pay</button>`:''}
+            <button class="btn btn-ghost btn-sm" onclick="deleteLoan('${loan.id}')">🗑</button>
           </div>
         </div>
       </div>
@@ -104,7 +104,7 @@ async function openLoanModal() {
 }
 
 async function saveLoan() {
-  const clientId = parseInt(document.getElementById('ln-client')?.value);
+  const clientId = document.getElementById('ln-client')?.value;
   const amount   = parseFloat(document.getElementById('ln-amount')?.value);
   if(!clientId){showToast('Select a client','error');return;}
   if(!amount||amount<=0){showToast('Enter a valid amount','error');return;}
@@ -141,7 +141,7 @@ function openInstallmentModal(loanId) {
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-        <button class="btn btn-success" onclick="submitInstallment(${loanId})">✓ Record</button>
+        <button class="btn btn-success" onclick="submitInstallment('${loanId}')">✓ Record</button>
       </div>
     </div>`;
   modal.classList.add('active');

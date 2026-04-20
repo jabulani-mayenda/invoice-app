@@ -59,8 +59,8 @@ function clientCardHTML(client) {
         ${client.email ? `<div class="client-contact">Email: ${client.email}</div>` : ''}
       </div>
       <div class="flex gap-8" style="flex-direction:column;align-items:flex-end;">
-        <button class="btn btn-secondary btn-sm" onclick="openClientModal(${client.id})">Edit</button>
-        <button class="btn btn-ghost btn-sm" onclick="deleteClient(${client.id})">Delete</button>
+        <button class="btn btn-secondary btn-sm" onclick="openClientModal('${client.id}')">Edit</button>
+        <button class="btn btn-ghost btn-sm" onclick="deleteClient('${client.id}')">Delete</button>
       </div>
     </div>
   `;
@@ -116,7 +116,7 @@ function openClientModal(clientId = null) {
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="saveClient(${clientId})">${isEdit ? 'Save Changes' : '+ Add Client'}</button>
+        <button class="btn btn-primary" onclick="saveClient('${clientId || ''}')">${isEdit ? 'Save Changes' : '+ Add Client'}</button>
       </div>
     </div>
   `;
