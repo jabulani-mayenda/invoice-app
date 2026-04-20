@@ -173,9 +173,24 @@ async function flushPendingWrites() {
   for (const op of batch) {
     try {
       await remoteRequest(op.tableName, { method: op.method, body: op.payload, ...op.options });
-    } catch {
-      // Still failing — re-queue for next cycle
-      pendingWrites.push(op);
+    } catch (err) {
+      // Check for permanent failures (e.g., schema mismatch, missing column)
+      let isPermanent = false;
+      try {
+        const errorData = JSON.parse(err.message);
+        // PGRST204 = Column not found, 42P01 = Table not found
+        if (errorData.code === 'PGRST204' || errorData.code === '42P01') {
+          console.error(`[Kweza] Discarding permanent sync failure for ${op.tableName}:`, errorData.message);
+          isPermanent = true;
+        }
+      } catch {
+        // Not a JSON error message, treat as potentially transient (network etc)
+      }
+
+      if (!isPermanent) {
+        // Still failing (likely network) — re-queue for next cycle
+        pendingWrites.push(op);
+      }
     }
   }
 }
@@ -358,15 +373,10 @@ function createCollectionWrapper(tableName, localCollection, filters = [], order
           if (orderSpec) { opts.orderBy = orderSpec.field; opts.ascending = orderSpec.ascending; }
           if (limitVal)  { opts.limit = limitVal; }
           const rows = await remoteRequest(tableName, opts);
-          // If online and we get results, update local cache and return remote truth.
-          if (Array.isArray(rows)) {
-            if (rows.length > 0) {
-              rawDb.table(tableName).bulkPut(rows.map(cleanRecord)).catch(() => {});
-            }
-            return rows;
-          }
+          return Array.isArray(rows) ? rows : [];
         } catch (err) {
-          console.warn(`[Kweza] Remote read failed for ${tableName}, falling back to local cache:`, err.message);
+          console.error(`[Kweza] Cloud read failed for ${tableName}:`, err.message);
+          throw err;
         }
       }
       return localCollection.toArray();
@@ -379,8 +389,11 @@ function createCollectionWrapper(tableName, localCollection, filters = [], order
       if (syncState.enabled) {
         try {
           const rows = await remoteRequest(tableName, { method: 'GET', filters, select: 'id' });
-          if (rows) return rows.length;
-        } catch {}
+          return Array.isArray(rows) ? rows.length : 0;
+        } catch (err) {
+          console.error(`[Kweza] Cloud count failed for ${tableName}:`, err.message);
+          throw err;
+        }
       }
       return localCollection.count();
     },
@@ -424,13 +437,14 @@ function createTableWrapper(tableName) {
   const config  = TABLE_CONFIG[tableName];
   const rawTable = rawDb.table(tableName);
 
-  // ── Helper: cache one row silently ──
+  // No longer caching rows locally
   function cacheRow(row) {
-    if (row) rawTable.put(cleanRecord(row)).catch(() => {});
+    // Disabled as per user request to avoid local storage
   }
 
   return {
     /* ── READ: always live from Supabase ── */
+    /* ── READ: Strictly from Supabase ── */
     async get(id) {
       if (syncState.enabled) {
         try {
@@ -438,9 +452,10 @@ function createTableWrapper(tableName) {
             method: 'GET',
             filters: [{ field: config.pk, op: 'eq', value: id }]
           });
-          if (rows && rows.length) { cacheRow(rows[0]); return rows[0]; }
+          return (rows && rows.length) ? rows[0] : null;
         } catch (err) {
-          console.warn(`[Kweza] Remote get failed for ${tableName}#${id}:`, err.message);
+          console.error(`[Kweza] Cloud get failed for ${tableName}#${id}:`, err.message);
+          throw err;
         }
       }
       return rawTable.get(id);
@@ -449,14 +464,10 @@ function createTableWrapper(tableName) {
       if (syncState.enabled) {
         try {
           const rows = await remoteRequest(tableName, { method: 'GET' });
-          if (Array.isArray(rows)) {
-            if (rows.length > 0) {
-              rawTable.bulkPut(rows.map(cleanRecord)).catch(() => {});
-            }
-            return rows;
-          }
+          return Array.isArray(rows) ? rows : [];
         } catch (err) {
-          console.warn(`[Kweza] Remote toArray failed for ${tableName}:`, err.message);
+          console.error(`[Kweza] Cloud toArray failed for ${tableName}:`, err.message);
+          throw err;
         }
       }
       return rawTable.toArray();
@@ -472,118 +483,69 @@ function createTableWrapper(tableName) {
     },
 
     /* ── WRITE: Supabase first, local cache updated after ── */
+    /* ── WRITE: Strictly to Supabase ── */
     async add(data) {
       const record = cleanRecord(data);
-      let localId;
       if (syncState.enabled) {
-        try {
-          const rows = await remoteInsert(tableName, record);
-          const inserted = Array.isArray(rows) ? rows[0] : rows;
-          if (inserted) { cacheRow(inserted); return inserted[config.pk]; }
-        } catch (error) {
-          reportCloudIssue(error);
-          // Save locally first, then queue the write for retry
-          localId = await rawTable.add(record);
-          queueFailedWrite(tableName, 'POST', { ...record, [config.pk]: localId }, {
-            headers: { Prefer: 'return=representation' }
-          });
-          return localId;
-        }
+        const rows = await remoteInsert(tableName, record);
+        const inserted = Array.isArray(rows) ? rows[0] : rows;
+        if (!inserted) throw new Error(`Cloud addition failed for ${tableName}`);
+        return inserted[config.pk];
       }
       return rawTable.add(record);
     },
     async put(data) {
       const record = cleanRecord(data);
       if (syncState.enabled) {
-        try {
-          const rows = await remoteUpsert(tableName, record);
-          const inserted = Array.isArray(rows) ? rows[0] : rows;
-          if (inserted) { cacheRow(inserted); return inserted[config.pk]; }
-        } catch (error) {
-          reportCloudIssue(error);
-          // Save locally then queue for retry
-          const localId = await rawTable.put(record);
-          queueFailedWrite(tableName, 'POST', record, {
-            onConflict: config.pk,
-            headers: { Prefer: 'resolution=merge-duplicates,return=representation' }
-          });
-          return localId;
-        }
+        const rows = await remoteUpsert(tableName, record);
+        const inserted = Array.isArray(rows) ? rows[0] : rows;
+        if (!inserted) throw new Error(`Cloud put failed for ${tableName}`);
+        return inserted[config.pk];
       }
       return rawTable.put(record);
     },
     async update(id, changes) {
       const payload = cleanRecord(changes);
       if (syncState.enabled) {
-        try {
-          const rows = await remotePatch(tableName, id, payload);
-          const updated = Array.isArray(rows) ? rows[0] : rows;
-          if (updated) { cacheRow(updated); return 1; }
-        } catch (error) {
-          reportCloudIssue(error);
-          // Save locally then queue for retry
-          await rawTable.update(id, payload);
-          queueFailedWrite(tableName, 'PATCH', payload, {
-            filters: [{ field: config.pk, op: 'eq', value: id }],
-            headers: { Prefer: 'return=representation' }
-          });
-          return 1;
-        }
+        const rows = await remotePatch(tableName, id, payload);
+        if (!rows) throw new Error(`Cloud update failed for ${tableName}#${id}`);
+        return 1;
       }
       return rawTable.update(id, payload);
     },
     async delete(id) {
       if (syncState.enabled) {
-        try { await remoteDeleteByFilters(tableName, [{ field: config.pk, op: 'eq', value: id }]); }
-        catch (error) { reportCloudIssue(error); }  // delete failures are not re-queued to avoid phantom deletes
+        await remoteDeleteByFilters(tableName, [{ field: config.pk, op: 'eq', value: id }]);
+        return;
       }
       return rawTable.delete(id);
     },
     async clear() {
       if (syncState.enabled) {
-        try {
-          const rows = await remoteRequest(tableName, { method: 'GET', select: config.pk });
-          if (rows && rows.length) {
-            for (const row of rows) {
-              await remoteDeleteByFilters(tableName, [{ field: config.pk, op: 'eq', value: row[config.pk] }]);
-            }
+        const rows = await remoteRequest(tableName, { method: 'GET', select: config.pk });
+        if (rows && rows.length) {
+          for (const row of rows) {
+            await remoteDeleteByFilters(tableName, [{ field: config.pk, op: 'eq', value: row[config.pk] }]);
           }
-        } catch (error) { reportCloudIssue(error); }
+        }
+        return;
       }
       return rawTable.clear();
     },
     async bulkAdd(items) {
       const payload = items.map(cleanRecord);
       if (syncState.enabled && payload.length) {
-        try {
-          const rows = await remoteInsert(tableName, payload);
-          if (Array.isArray(rows) && rows.length) {
-            await rawTable.bulkPut(rows.map(cleanRecord));
-            return rows.length;
-          }
-        } catch (error) {
-          reportCloudIssue(error);
-          // Save locally then queue each item for retry
-          const localIds = await rawTable.bulkAdd(payload, { allKeys: true });
-          payload.forEach((rec, i) => queueFailedWrite(tableName, 'POST', { ...rec, [config.pk]: localIds[i] }, {
-            headers: { Prefer: 'return=representation' }
-          }));
-          return localIds.length;
-        }
+        const rows = await remoteInsert(tableName, payload);
+        if (!rows) throw new Error(`Cloud bulk addition failed for ${tableName}`);
+        return Array.isArray(rows) ? rows.length : items.length;
       }
       return rawTable.bulkAdd(payload);
     },
     async bulkPut(items) {
       const payload = items.map(cleanRecord);
       if (syncState.enabled && payload.length) {
-        try { await remoteUpsert(tableName, payload); } catch (error) {
-          reportCloudIssue(error);
-          // Queue each item for retry
-          payload.forEach(rec => queueFailedWrite(tableName, 'POST', rec, {
-            onConflict: config.pk,
-            headers: { Prefer: 'resolution=merge-duplicates,return=representation' }
-          }));
-        }
+        await remoteUpsert(tableName, payload);
+        return items.length;
       }
       return rawTable.bulkPut(payload);
     },

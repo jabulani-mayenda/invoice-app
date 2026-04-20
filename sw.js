@@ -57,6 +57,9 @@ self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
+  const isHttp = url.protocol === 'http:' || url.protocol === 'https:';
+  if (!isHttp) return;
+
   const isAsset = /\.(png|jpg|jpeg|svg|ico|woff2|woff)$/.test(url.pathname);
   const isExternal = url.origin !== self.location.origin;
 
