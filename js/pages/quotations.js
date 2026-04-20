@@ -463,7 +463,6 @@ async function saveQuotation(quoteId = null) {
   const user = window.KwezaAuth?.getCurrentUser?.() || {};
   const data = {
     clientId,
-    saleId: document.getElementById('q-sale')?.value || null,
     number: document.getElementById('q-number')?.value || '',
     date: document.getElementById('q-date')?.value || new Date().toISOString().split('T')[0],
     validityDays: parseInt(document.getElementById('q-validity')?.value, 10) || 14,
@@ -478,6 +477,9 @@ async function saveQuotation(quoteId = null) {
     preparedBy: user.name || '',
     preparedByDept: user.department || ''
   };
+
+  const saleId = document.getElementById('q-sale')?.value;
+  if (saleId) data.saleId = saleId;
 
   const { db, saveLineItems, incrementQuoteNumber, logActivity } = window.KwezaDB;
   let id = quoteId;

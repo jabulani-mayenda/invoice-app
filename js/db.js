@@ -595,13 +595,16 @@ const db = {
   async open() {
     // Enable cloud sync if Supabase is configured
     syncState.enabled = isCloudEnabled();
-    await rawDb.open();
-    // Seed local defaults (settings, departments) — only used as offline fallback
-    await seedLocalDefaults();
+    
     if (syncState.enabled) {
-      // Seed cloud defaults silently — don't block app startup
+      console.log('[Kweza] Strictly Cloud-Only mode active. Local storage (Dexie) bypassed.');
+      // Seed cloud defaults silently
       seedCloudDefaults().catch(err => console.warn('[Kweza] seedCloudDefaults skipped:', err.message));
+      return;
     }
+
+    await rawDb.open();
+    await seedLocalDefaults();
   }
 };
 

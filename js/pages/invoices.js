@@ -475,7 +475,6 @@ async function saveInvoice(invoiceId = null) {
   const user = window.KwezaAuth?.getCurrentUser?.() || {};
   const data = {
     clientId,
-    saleId: document.getElementById('inv-sale')?.value || null,
     number: document.getElementById('inv-number')?.value || '',
     date: document.getElementById('inv-date')?.value || new Date().toISOString().split('T')[0],
     dueDate: document.getElementById('inv-due')?.value || null,
@@ -490,6 +489,9 @@ async function saveInvoice(invoiceId = null) {
     preparedBy: user.name || '',
     preparedByDept: user.department || ''
   };
+
+  const saleId = document.getElementById('inv-sale')?.value;
+  if (saleId) data.saleId = saleId;
 
   const { db, saveLineItems, incrementInvoiceNumber, logActivity } = window.KwezaDB;
   let id = invoiceId;
