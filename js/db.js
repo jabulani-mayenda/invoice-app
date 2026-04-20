@@ -256,19 +256,37 @@ async function remoteRequest(tableName, options = {}) {
   }
 
   const headers = makeHeaders(options.headers || {});
-  const response = await fetch(url.toString(), {
-    method: options.method || 'GET',
-    headers,
-    body: options.body ? JSON.stringify(options.body) : undefined
-  });
+  try {
+    const response = await fetch(url.toString(), {
+      method: options.method || 'GET',
+      headers,
+      body: options.body ? JSON.stringify(options.body) : undefined
+    });
 
-  if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || `Supabase request failed for ${tableName}`);
+    if (!response.ok) {
+      const message = await response.text();
+      let errorInfo;
+      try { errorInfo = JSON.parse(message); } catch { errorInfo = { message }; }
+      
+      const errMsg = errorInfo.message || errorInfo.error || `Request failed (${response.status})`;
+      throw new Error(errMsg);
+    }
+
+    if (response.status === 204) return null;
+    return await response.json();
+  } catch (err) {
+    // If it's a network error (like blocked by extension), report it clearly
+    const isNetworkError = err.name === 'TypeError' && err.message === 'Failed to fetch';
+    const finalMsg = isNetworkError 
+      ? 'Connection blocked or unavailable. Please check your internet and ad-blocker.' 
+      : err.message;
+    
+    console.error(`[Kweza] Cloud Request Error (${tableName}):`, finalMsg);
+    if (typeof window.showToast === 'function') {
+      window.showToast(finalMsg, 'error');
+    }
+    throw new Error(finalMsg);
   }
-
-  if (response.status === 204) return null;
-  return response.json();
 }
 
 function reportCloudIssue(error) {
